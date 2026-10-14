@@ -143,6 +143,8 @@ export async function writeFile(conn: Connection, writer: Keypair, file: Uint8Ar
   for (let i = 0; i < total; i++) if (!done.has(i)) queue.push(i);
   const inFlight = new Map<string, { index: number; lastValid: number }>();
   let resent = 0;
+  // Sends overlap: waiting for each one to return would cap the rate at one per network round trip.
+  let sending = 0;
   let hash = await conn.getLatestBlockhash(commitment);
   let hashAt = Date.now();
   let failure: unknown = null;
@@ -150,7 +152,7 @@ export async function writeFile(conn: Connection, writer: Keypair, file: Uint8Ar
   const report = () => opts.onProgress?.({ done: done.size, total, inFlight: inFlight.size, resent });
 
   const checker = (async () => {
-    while ((queue.length || inFlight.size) && !failure) {
+    while ((queue.length || inFlight.size || sending) && !failure) {
       await new Promise((r) => setTimeout(r, 1500));
       const sigs = [...inFlight.keys()];
       if (!sigs.length) continue;
@@ -184,8 +186,12 @@ export async function writeFile(conn: Connection, writer: Keypair, file: Uint8Ar
 
   const gap = 1000 / rps;
   let nextAt = Date.now();
-  while ((queue.length || inFlight.size) && !failure) {
-    if (!queue.length || inFlight.size >= maxInFlight) { await new Promise((r) => setTimeout(r, 200)); continue; }
+  let pauseUntil = 0;
+  while ((queue.length || inFlight.size || sending) && !failure) {
+    if (!queue.length || inFlight.size + sending >= maxInFlight || Date.now() < pauseUntil) {
+      await new Promise((r) => setTimeout(r, 200));
+      continue;
+    }
     if (Date.now() - hashAt > 20_000) { hash = await retry(() => conn.getLatestBlockhash(commitment)); hashAt = Date.now(); }
     const wait = nextAt - Date.now();
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
@@ -197,13 +203,12 @@ export async function writeFile(conn: Connection, writer: Keypair, file: Uint8Ar
       blockhash: hash.blockhash, microLamports: opts.microLamports ?? 0, program: opts.program,
     });
     tx.sign(writer);
-    try {
-      const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 2 });
-      inFlight.set(sig, { index, lastValid: hash.lastValidBlockHeight });
-    } catch {
-      queue.push(index); // rate limited or rejected: try again later
-      await new Promise((r) => setTimeout(r, 1000));
-    }
+    const lastValid = hash.lastValidBlockHeight;
+    sending++;
+    conn.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 2 })
+      .then((sig) => { inFlight.set(sig, { index, lastValid }); })
+      .catch(() => { queue.push(index); pauseUntil = Date.now() + 1000; }) // rate limited or rejected: try again later
+      .finally(() => { sending--; });
   }
   await checker;
   if (failure) throw failure;
