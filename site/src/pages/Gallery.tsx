@@ -31,10 +31,28 @@ export function Capsule({ n }: { n: number }) {
   return <span className="capsule"><span>#</span><span>{n.toLocaleString()}</span></span>;
 }
 
+export function ScribeCard({ s }: { s: ScribeView }) {
+  return (
+    <a className="card" href={`#/scribe/${s.address}`}>
+      <div className="art">
+        <Portrait s={s} />
+        <span className="corner"><Capsule n={s.birthNumber + 1} /></span>
+        {s.listing && <span className="tag-price">{sol(s.listing.price)} SOL</span>}
+      </div>
+      <div className="body">
+        <div className="name">{s.name ?? 'Inscribing…'}</div>
+        <div className="sub">{brainLine(s)}</div>
+        <Badges s={s} />
+      </div>
+    </a>
+  );
+}
+
 export function Gallery() {
   const [list, setList] = useState<ScribeView[] | null>(null);
   const [error, setError] = useState('');
   const [sort, setSort] = useState<'new' | 'birth' | 'rank' | 'sale'>('new');
+  const [q, setQ] = useState('');
   useEffect(() => {
     let live = true;
     const load = () => getScribes().then((l) => { if (live) { setList(l); setError(''); } }).catch((e) => live && setError(e.message));
@@ -43,12 +61,28 @@ export function Gallery() {
     return () => { live = false; clearInterval(t); };
   }, []);
   const visible = useMemo(() => (list ?? []).filter((s) => !s.hidden && s.status.state !== 'invalid'), [list]);
-  const shown = useMemo(() => {
+  const order = (visible: ScribeView[]) => {
     if (sort === 'sale') return visible.filter((s) => s.listing).sort((a, b) => a.listing!.price - b.listing!.price);
     if (sort === 'rank') return [...visible].sort((a, b) => (a.rarity?.rank ?? 1e9) - (b.rarity?.rank ?? 1e9));
     if (sort === 'new') return [...visible].reverse();
     return visible;
-  }, [visible, sort]);
+  };
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const found = needle ? visible.filter((s) => [s.name, s.purpose, s.model?.name, s.brain?.kind === 'bound' ? s.brain.model : '', String(s.birthNumber + 1)]
+      .some((x) => x?.toLowerCase().includes(needle))) : visible;
+    return order(found);
+  }, [visible, sort, q]);
+  const stats = useMemo(() => {
+    const forSale = visible.filter((s) => s.listing);
+    return {
+      born: visible.length,
+      verified: visible.filter((s) => s.verified).length,
+      onchain: visible.filter((s) => s.brain?.kind === 'inscribed').length,
+      forSale: forSale.length,
+      floor: forSale.length ? Math.min(...forSale.map((s) => s.listing!.price)) : null,
+    };
+  }, [visible]);
   const latest = useMemo(() => [...visible].reverse().slice(0, 4), [visible]);
 
   return (
@@ -78,6 +112,13 @@ export function Gallery() {
         </div>
       </section>
 
+      <section className="stats">
+        <div><b>{list ? stats.born : '—'}</b><span>scribes born</span></div>
+        <div><b>{list ? stats.onchain : '—'}</b><span>fully on-chain brains</span></div>
+        <div><b>{list ? stats.verified : '—'}</b><span>verified</span></div>
+        <div><b>{list ? (stats.floor === null ? '—' : sol(stats.floor)) : '—'}</b><span>floor price (SOL) · {stats.forSale} for sale</span></div>
+      </section>
+
       <section className="steps3">
         <div><span className="n">01</span><h3>Package</h3><p>Give your agent the scribe brief. It writes its own personality and picks its brain: an open model, or a hosted one like Claude.</p></div>
         <div><span className="n">02</span><h3>Inscribe</h3><p>Drop the files, see your attributes and the price, and sign once. Your scribe is born with a birth number that never changes.</p></div>
@@ -86,6 +127,7 @@ export function Gallery() {
 
       <div className="toolbar">
         <h2>Explore scribes</h2>
+        <input className="search" type="search" placeholder="Search by name, model or #" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="seg">
           <button className={sort === 'new' ? 'on' : ''} onClick={() => setSort('new')}>Newest</button>
           <button className={sort === 'birth' ? 'on' : ''} onClick={() => setSort('birth')}>First born</button>
@@ -94,23 +136,9 @@ export function Gallery() {
         </div>
       </div>
       {error && <div className="notice bad" style={{ marginBottom: 16 }}>Could not reach the indexer: {error}</div>}
-      {list && shown.length === 0 && <div className="empty">{sort === 'sale' ? 'Nothing is for sale right now.' : <>No scribes yet. <a href="#/create">Inscribe the first one.</a></>}</div>}
-      <div className="grid">
-        {shown.map((s) => (
-          <a key={s.address} className="card" href={`#/scribe/${s.address}`}>
-            <div className="art">
-              <Portrait s={s} />
-              <span className="corner"><Capsule n={s.birthNumber + 1} /></span>
-              {s.listing && <span className="tag-price">{sol(s.listing.price)} SOL</span>}
-            </div>
-            <div className="body">
-              <div className="name">{s.name ?? 'Inscribing…'}</div>
-              <div className="sub">{brainLine(s)}</div>
-              <Badges s={s} />
-            </div>
-          </a>
-        ))}
-      </div>
+      {!list && !error && <div className="grid">{[0, 1, 2, 3].map((i) => <div key={i} className="card skeleton"><div className="art" /><div className="body"><div className="line" /><div className="line short" /></div></div>)}</div>}
+      {list && shown.length === 0 && <div className="empty">{q ? `No scribe matches “${q}”.` : sort === 'sale' ? 'Nothing is for sale right now.' : <>No scribes yet. <a href="#/create">Inscribe the first one.</a></>}</div>}
+      <div className="grid">{shown.map((s) => <ScribeCard key={s.address} s={s} />)}</div>
     </>
   );
 }

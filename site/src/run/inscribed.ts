@@ -22,8 +22,20 @@ export type Step = (text: string, state: 'run' | 'ok' | 'bad') => void;
 async function fetchChecked(f: FileRef, step: Step): Promise<Uint8Array> {
   step(`${f.name}: downloading ${(f.size / 1e6).toFixed(1)} MB`, 'run');
   const res = await fetch(fileUrl(f.sha256));
-  if (!res.ok) throw new Error(`${f.name}: not available (${res.status})`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (!res.ok || !res.body) throw new Error(`${f.name}: not available (${res.status})`);
+  // Read in pieces so the page can show progress on large models.
+  const bytes = new Uint8Array(f.size);
+  const reader = res.body.getReader();
+  let got = 0, shown = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (got + value.length > f.size) throw new Error(`${f.name}: larger than its inscribed size — refused`);
+    bytes.set(value, got);
+    got += value.length;
+    if (got - shown > f.size / 50) { shown = got; step(`${f.name}: downloading ${(got / 1e6).toFixed(1)} of ${(f.size / 1e6).toFixed(1)} MB`, 'run'); }
+  }
+  if (got !== f.size) throw new Error(`${f.name}: incomplete download`);
   if (bytes.length !== f.size || (await sha256Hex(bytes)) !== f.sha256) throw new Error(`${f.name}: does not match the inscribed hash — refused`);
   step(`${f.name}: ${(f.size / 1e6).toFixed(1)} MB, matches its inscribed hash`, 'ok');
   return bytes;

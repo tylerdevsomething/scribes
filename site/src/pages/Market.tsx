@@ -1,23 +1,23 @@
 // The market panel on a scribe page: buy it, or (for its owner) list, reprice, cancel or give it.
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { PublicKey } from '@solana/web3.js';
 import { buyInstruction, cancelInstruction, giveInstruction, listInstruction, scribesProgram } from '../../../lib/src/registry.ts';
 import type { ScribeView } from '../api.ts';
-import { API, conn, explorer, sol } from '../config.ts';
+import { conn, explorer, sol } from '../config.ts';
 import { sendInstructions, useWallet } from '../wallet.ts';
+import { useSettings } from '../settings.ts';
 import { WalletButton } from '../WalletButton.tsx';
 
 const program = scribesProgram(conn);
 
 export function MarketPanel({ s, onChange }: { s: ScribeView; onChange: () => void }) {
   const me = useWallet();
-  const [feeBps, setFeeBps] = useState<number | null>(null);
+  const feeBps = useSettings()?.feeBps ?? null;
   const [price, setPrice] = useState('');
   const [to, setTo] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [done, setDone] = useState<{ text: string; sig: string } | null>(null);
-  useEffect(() => { fetch(`${API}/market`).then((r) => r.json()).then((j) => setFeeBps(j.feeBps)).catch(() => {}); }, []);
 
   const mine = me === s.owner;
   const listing = s.listing;

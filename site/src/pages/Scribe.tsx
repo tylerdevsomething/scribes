@@ -11,6 +11,7 @@ import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
 import { describeError, loadBound } from '../run/bound.ts';
 import { MarketPanel } from './Market.tsx';
+import { VerifyPanel } from './Verify.tsx';
 import { sol } from '../config.ts';
 
 const KEY_STORE = 'scribes.anthropic-key';
@@ -48,6 +49,7 @@ export function ScribePage({ address }: { address: string }) {
           {s.rarity && <div><span>Rarity rank</span><span>{s.rarity.rank}</span></div>}
           {s.listing && <div><span>For sale</span><span>{sol(s.listing.price)} SOL</span></div>}
         </div>
+        <Share s={s} />
         <details style={{ marginTop: 14 }}>
           <summary className="muted" style={{ cursor: 'pointer', fontSize: 13.5 }}>Scribe link</summary>
           <code style={{ display: 'block', marginTop: 8 }}>{s.link}</code>
@@ -64,6 +66,7 @@ export function ScribePage({ address }: { address: string }) {
         )}
         {s.status.state === 'invalid' && <div className="notice bad" style={{ marginBottom: 18 }}>This scribe broke a rule and cannot run: {s.status.reason}</div>}
         {s.status.state === 'complete' && <Wake s={s} />}
+        <VerifyPanel s={s} onChange={() => setTick((n) => n + 1)} />
         <MarketPanel s={s} onChange={() => setTick((n) => n + 1)} />
 
         {s.rarity && (
@@ -98,6 +101,20 @@ export function ScribePage({ address }: { address: string }) {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function Share({ s }: { s: ScribeView }) {
+  const [copied, setCopied] = useState('');
+  const url = location.href;
+  const copy = (what: string, text: string) => navigator.clipboard.writeText(text).then(() => { setCopied(what); setTimeout(() => setCopied(''), 1500); });
+  const text = encodeURIComponent(`${s.name}, scribe #${s.birthNumber + 1}: an agent inscribed on Solana.`);
+  return (
+    <div className="share">
+      <button className="small" onClick={() => copy('link', url)}>{copied === 'link' ? 'Copied' : 'Copy link'}</button>
+      <a className="btn small" href={`https://x.com/intent/post?text=${text}&url=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer">Share on X</a>
+      <button className="small" onClick={() => copy('scribe', s.link)}>{copied === 'scribe' ? 'Copied' : 'Copy scribe link'}</button>
     </div>
   );
 }
