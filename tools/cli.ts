@@ -9,7 +9,6 @@
 //   (inscribe registers the scribe with the program at the end; --no-birth skips that)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { createRequire } from 'node:module';
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
 import { fileTag, readFile, writeFile } from '../lib/src/chain.ts';
 import { chunkCount } from '../lib/src/chunk.ts';
@@ -17,6 +16,7 @@ import { sha256Hex } from '../lib/src/bytes.ts';
 import { readGguf } from '../lib/src/gguf.ts';
 import { decodeManifest, encodeManifest, formatLink, parseLink, type Brain, type FileRef, type Manifest, type Role } from '../lib/src/manifest.ts';
 import { parsePersonality } from '../lib/src/personality.ts';
+import { runtimeFiles } from '../indexer/src/runtime.ts';
 import { ZERO_SHA, birthInstruction, configAddress, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
 
 function args(): Record<string, string> {
@@ -36,15 +36,6 @@ function loadKey(path: string): Keypair {
   return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(path, 'utf8'))));
 }
 
-// The official runtime: wllama (llama.cpp compiled to WASM), the exact files from the installed package.
-function runtimeFiles(): { name: string; bytes: Uint8Array }[] {
-  const require = createRequire(import.meta.url);
-  const dir = join(dirname(require.resolve('@wllama/wllama/package.json')), 'esm');
-  return [
-    { name: 'wllama.js', bytes: new Uint8Array(readFileSync(join(dir, 'index.min.js'))) },
-    { name: 'wllama.wasm', bytes: new Uint8Array(readFileSync(join(dir, 'wasm', 'wllama.wasm'))) },
-  ];
-}
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(6);
 

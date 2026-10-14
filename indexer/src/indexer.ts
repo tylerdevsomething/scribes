@@ -183,6 +183,12 @@ export class Indexer {
     return e ? this.view(e) : null;
   }
 
+  // The writer of a complete, checked copy of this file on chain, if any (so uploads can reuse it).
+  completeFile(sha: string): string | null {
+    for (const c of this.collectors.values()) if (c.ref.sha256 === sha && c.complete) return c.ref.writer;
+    return null;
+  }
+
   // A file is served only if it belongs to a valid, complete scribe that is not hidden.
   servable(sha: string): boolean {
     for (const e of this.entries.values()) {

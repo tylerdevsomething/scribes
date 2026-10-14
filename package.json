@@ -16,7 +16,8 @@
     "@coral-xyz/anchor": "^0.31.1",
     "@solana/spl-token": "^0.4.13",
     "@solana/web3.js": "^1.98.4",
-    "@wllama/wllama": "^3.8.1"
+    "@wllama/wllama": "^3.8.1",
+    "sharp": "^0.34.4"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
