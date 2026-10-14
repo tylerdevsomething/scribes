@@ -7,6 +7,7 @@
 //   node tools/cli.ts rebuild  --link <scribes:v1:...> --rpc <url> [--out .cache/files]
 //   node tools/cli.ts init     --key <upgrade authority.json> --rpc <url> [--verifier <pk>] [--fee-receiver <pk>] [--fee <lamports>]
 //   node tools/cli.ts market   --key <admin.json> --rpc <url> --fee-bps 250
+//   node tools/cli.ts test-token --key <admin.json> --rpc <url> [--burn 10] [--verifier <pk>] [--to <pk> --amount 100]   (not mainnet)
 //   (inscribe registers the scribe with the program at the end; --no-birth skips that)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -18,7 +19,8 @@ import { readGguf } from '../lib/src/gguf.ts';
 import { decodeManifest, encodeManifest, formatLink, parseLink, type Brain, type FileRef, type Manifest, type Role } from '../lib/src/manifest.ts';
 import { parsePersonality } from '../lib/src/personality.ts';
 import { runtimeFiles } from '../indexer/src/runtime.ts';
-import { ZERO_SHA, birthInstruction, configAddress, marketAddress, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
+import { ZERO_SHA, birthInstruction, configAddress, marketAddress, readSettings, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
+import { TOKEN_2022_PROGRAM_ID, createMint, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
 
 function args(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -175,6 +177,33 @@ async function main() {
     const ix = await program.methods.setMarket(bps).accountsPartial({ admin: key.publicKey, config: configAddress(), market: marketAddress() }).instruction();
     const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
     console.log(`sale fee set to ${bps / 100}% · ${sig}`);
+  } else if (cmd === 'test-token') {
+    // A stand-in for $SCRIBES on localnet/devnet: a Token-2022 mint (6 decimals) the admin can mint,
+    // set as the burn mint, so verification can be tested before the real token exists.
+    const conn = new Connection(need(a, 'rpc'), 'confirmed');
+    if ((await conn.getGenesisHash()) === '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d') throw new Error('not on mainnet');
+    const key = loadKey(need(a, 'key'));
+    const program = scribesProgram(conn);
+    const current = await readSettings(program);
+    let mint: PublicKey;
+    if (current.burnMint) mint = new PublicKey(current.burnMint);
+    else {
+      mint = await createMint(conn, key, key.publicKey, null, 6, undefined, { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
+      console.log(`test token mint ${mint.toBase58()}`);
+    }
+    const burn = BigInt(a.burn ?? '10') * 1_000_000n;
+    const settings = settingsArg({
+      admin: key.publicKey, verifier: new PublicKey(a.verifier ?? current.verifier), feeReceiver: new PublicKey(current.feeReceiver),
+      birthFee: current.birthFee, burnMint: mint, burnAmount: burn,
+    });
+    const ix = await program.methods.setSettings(settings).accountsPartial({ admin: key.publicKey, config: configAddress() }).instruction();
+    await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
+    console.log(`verification open: burns ${burn / 1_000_000n} test tokens · verifier ${a.verifier ?? current.verifier}`);
+    if (a.to) {
+      const ata = await getOrCreateAssociatedTokenAccount(conn, key, mint, new PublicKey(a.to), false, 'confirmed', undefined, TOKEN_2022_PROGRAM_ID);
+      await mintTo(conn, key, mint, ata.address, key, BigInt(a.amount ?? '100') * 1_000_000n, [], { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
+      console.log(`minted ${a.amount ?? '100'} test tokens to ${a.to}`);
+    }
   } else if (cmd === 'rebuild') {
     const conn = new Connection(need(a, 'rpc'), 'confirmed');
     const link = parseLink(need(a, 'link'));

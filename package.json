@@ -21,9 +21,11 @@
     "@solana/web3.js": "^1.98.4",
     "@wllama/wllama": "^3.8.1",
     "buffer": "^6.0.3",
+    "node-llama-cpp": "^3.21.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sharp": "^0.34.4"
+    "sharp": "^0.34.4",
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

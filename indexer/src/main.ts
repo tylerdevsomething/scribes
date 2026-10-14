@@ -5,6 +5,9 @@
 // GET /scribes          every scribe with status, attributes and rarity (hidden ones flagged, not removed)
 // GET /scribe/:address  one scribe
 // GET /market           { feeBps } the sale fee
+// GET /settings         chain settings: verifier, burn mint and amount (+ decimals, token program), fees
+// POST /verify/:address the bot's checks; a passing scribe gets a signed pass (needs --verifier)
+// POST /faucet {owner}  test SOL and test tokens (only with --faucet, never on mainnet)
 // GET /files/:sha256    a checked file of a valid, complete, not-hidden scribe
 //
 // Create flow (needs --writer, the server's writer key):
@@ -24,7 +27,11 @@ import { Connection } from '@solana/web3.js';
 import { Indexer } from './indexer.ts';
 import { LIMITS, Uploads } from './uploads.ts';
 import { runtimeFiles } from './runtime.ts';
-import { Keypair } from '@solana/web3.js';
+import { Verifier } from './verifier.ts';
+import { Faucet } from './faucet.ts';
+import { Keypair, PublicKey } from '@solana/web3.js';
+import { getMint } from '@solana/spl-token';
+import { readSettings, scribesProgram } from '../../lib/src/registry.ts';
 
 const arg = (k: string, d?: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -46,6 +53,21 @@ const uploads = writerPath
   })
   : null;
 setInterval(() => uploads?.sweep(), 3600 * 1000);
+const loadKey = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(p, 'utf8'))));
+const verifier = process.argv.includes('--verifier')
+  ? new Verifier({ indexer, key: loadKey(arg('verifier')), anthropicKey: process.env.ANTHROPIC_API_KEY })
+  : null;
+const faucet = process.argv.includes('--faucet') ? new Faucet(conn, loadKey(arg('faucet'))) : null;
+
+async function settings() {
+  const s = await readSettings(scribesProgram(conn));
+  let token: { decimals: number; program: string } | null = null;
+  if (s.burnMint) {
+    const info = await conn.getAccountInfo(new PublicKey(s.burnMint));
+    if (info) token = { decimals: (await getMint(conn, new PublicKey(s.burnMint), 'confirmed', info.owner)).decimals, program: info.owner.toBase58() };
+  }
+  return { ...s, token, feeBps: indexer.feeBps, verificationOpen: !!(s.burnMint && token), faucet: !!faucet };
+}
 
 const MAX_JSON = 16 * 1024;
 function body(req: import('node:http').IncomingMessage, limit: number): Promise<Uint8Array> {
@@ -126,6 +148,17 @@ createServer((req, res) => {
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
   if (parts[0] === 'health') return json(res, 200, { syncedAt: indexer.syncedAt, scribes: indexer.list().length });
   if (parts[0] === 'market') return json(res, 200, { feeBps: indexer.feeBps });
+  if (parts[0] === 'settings') { settings().then((s) => json(res, 200, s), (e) => json(res, 500, { error: e.message })); return; }
+  if (parts[0] === 'verify' && parts.length === 2 && req.method === 'POST') {
+    if (!verifier) return json(res, 404, { error: 'the verification bot is not running on this server' });
+    verifier.verify(parts[1]).then((v) => json(res, 200, v), (e) => json(res, 400, { error: e.message }));
+    return;
+  }
+  if (parts[0] === 'faucet' && req.method === 'POST') {
+    if (!faucet) return json(res, 404, { error: 'no test faucet on this network' });
+    jsonBody(req).then((b) => faucet.drip(new PublicKey(String(b.owner)))).then((r) => json(res, 200, r), (e) => json(res, 400, { error: e.message }));
+    return;
+  }
   if (parts[0] === 'scribes' && parts.length === 1) return json(res, 200, indexer.list());
   if (parts[0] === 'scribe' && parts.length === 2) {
     const s = indexer.get(parts[1]);

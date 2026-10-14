@@ -195,6 +195,11 @@ export class Indexer {
     return e ? this.view(e) : null;
   }
 
+  // The scribe's parsed personality, once its files are complete.
+  personality(address: string): Personality | null {
+    return this.entries.get(address)?.personality ?? null;
+  }
+
   // The writer of a complete, checked copy of this file on chain, if any (so uploads can reuse it).
   completeFile(sha: string): string | null {
     for (const c of this.collectors.values()) if (c.ref.sha256 === sha && c.complete) return c.ref.writer;

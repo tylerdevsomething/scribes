@@ -124,3 +124,33 @@ export async function buyInstruction(program: Program<Scribes>, buyer: PublicKey
 export function giveInstruction(program: Program<Scribes>, owner: PublicKey, scribe: PublicKey | string, to: PublicKey) {
   return program.methods.give(to).accountsPartial({ owner, scribe: scribeKey(scribe) }).instruction();
 }
+
+// ---- verification ----
+
+export interface ChainSettings {
+  verifier: string;
+  feeReceiver: string;
+  birthFee: number;
+  burnMint: string | null; // null until the token exists: verification is closed
+  burnAmount: string; // base units (u64, as a string)
+  births: number;
+}
+
+export async function readSettings(program: Program<Scribes>): Promise<ChainSettings> {
+  const c = await program.account.config.fetch(configAddress());
+  return {
+    verifier: c.verifier.toBase58(), feeReceiver: c.feeReceiver.toBase58(), birthFee: c.birthFee.toNumber(),
+    burnMint: c.burnMint.equals(PublicKey.default) ? null : c.burnMint.toBase58(),
+    burnAmount: c.burnAmount.toString(), births: c.births.toNumber(),
+  };
+}
+
+// The verify instruction (the verifier's Ed25519 pass must be the instruction just before it).
+export function verifyInstruction(program: Program<Scribes>, args: {
+  owner: PublicKey; scribe: PublicKey | string; mint: PublicKey; ownerTokens: PublicKey; tokenProgram: PublicKey;
+}) {
+  return program.methods.verify().accountsPartial({
+    owner: args.owner, config: configAddress(), scribe: scribeKey(args.scribe), mint: args.mint,
+    ownerTokens: args.ownerTokens, tokenProgram: args.tokenProgram, instructions: new PublicKey('Sysvar1nstructions1111111111111111111111111'),
+  }).instruction();
+}
