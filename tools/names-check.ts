@@ -7,7 +7,10 @@ const BANNED = ['c2VxdWVudHM=', 'cHJvb2Y=', 'c3RyaWtl', 'ZW52ZWxvcGU=', 'dmF1bHQ
   .map((b) => Buffer.from(b, 'base64').toString('utf8'));
 
 // Platform identifiers we cannot rename (third-party APIs). Keep this list short.
-const ALLOWED = ['isOnCurve', 'location.origin', 'remote add origin', 'push -u origin'];
+const ALLOWED = [
+  'isOnCurve', 'location.origin', 'remote add origin', 'push -u origin',
+  'Cross-Origin-Opener-Policy', 'Cross-Origin-Embedder-Policy', 'cross-origin-resource-policy', 'crossOriginIsolated', 'same-origin',
+];
 
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' })
   .split('\n').filter(Boolean).filter((f) => f !== 'package-lock.json');

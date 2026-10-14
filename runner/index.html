@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scribe Runner</title>
+<style>
+  :root { --bg:#0f1012; --panel:#17191d; --line:#2a2d33; --text:#e8e6e1; --dim:#8d9098; --accent:#7fd1b9; --you:#23303a; --bad:#ff8a80; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .dim { color: var(--dim); }
+  input, select, button, textarea { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #000; border: 0; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+  .row > input.grow { flex: 1; min-width: 220px; }
+  #steps { list-style: none; padding: 0; margin: 12px 0; font-size: 13px; }
+  #steps li { padding: 3px 0; }
+  #steps li.ok::before { content: "✓ "; color: var(--accent); }
+  #steps li.run::before { content: "… "; color: var(--dim); }
+  #steps li.bad { color: var(--bad); }
+  #steps li.bad::before { content: "✗ "; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 12px 0; }
+  #log { min-height: 200px; max-height: 55vh; overflow-y: auto; }
+  .msg { white-space: pre-wrap; margin: 0 0 10px; }
+  .msg.you { background: var(--you); padding: 6px 8px; border-radius: 6px; }
+  .stats { font-size: 11px; color: var(--dim); }
+  code { font-size: 12px; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Scribe runner</h1>
+  <div class="dim">Reads a scribe's manifest from Solana, checks every file against it, and runs the scribe in this browser.</div>
+
+  <div class="row"><input id="link" class="grow" placeholder="scribes:v1:&lt;writer&gt;:&lt;sha256&gt;:&lt;size&gt;"></div>
+  <div class="row">
+    <input id="rpc" class="grow" value="http://127.0.0.1:8899" title="Solana RPC">
+    <select id="source" title="Where the large files come from">
+      <option value="cache">Large files from the cache (checked against chain)</option>
+      <option value="chain">Rebuild every file from chain in this browser</option>
+    </select>
+    <button id="open" class="primary">Open scribe</button>
+  </div>
+  <ul id="steps"></ul>
+
+  <div id="who" class="card" hidden></div>
+  <div id="chat" class="card" hidden>
+    <div id="log"></div>
+    <div class="row">
+      <input id="input" class="grow" placeholder="Say something…">
+      <button id="send">Send</button>
+    </div>
+  </div>
+</main>
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>
