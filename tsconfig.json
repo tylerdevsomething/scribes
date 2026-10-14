@@ -3,14 +3,30 @@
     "target": "es2023",
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "lib": ["es2023", "dom", "dom.iterable"],
-    "types": ["node", "vite/client"],
+    "lib": [
+      "es2023",
+      "dom",
+      "dom.iterable"
+    ],
+    "types": [
+      "node",
+      "vite/client"
+    ],
     "strict": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "jsx": "react-jsx"
   },
-  "include": ["lib", "tools", "indexer/src", "runner/src", "runner/vite.config.ts"]
+  "include": [
+    "lib",
+    "tools",
+    "indexer/src",
+    "runner/src",
+    "runner/vite.config.ts",
+    "site/src",
+    "site/vite.config.ts"
+  ]
 }
