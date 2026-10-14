@@ -16,6 +16,8 @@ function partOf(f: File): Part | null {
   return null;
 }
 
+const size = (n: number) => (n < 1e6 ? `${(n / 1e3).toFixed(1)} KB` : `${(n / 1e6).toFixed(1)} MB`);
+
 export function Create() {
   const [files, setFiles] = useState<Partial<Record<Part, File>>>({});
   const [ignored, setIgnored] = useState<string[]>([]);
@@ -94,11 +96,20 @@ export function Create() {
   const ready = !!files.personality && (!!files.model || !!files.brain);
   const q = report?.quote;
   const found = wallets();
+  const stage = phase ? 3 : report?.ok ? 2 : 1;
+  const brainFile = files.model ?? files.brain;
 
   return (
-    <div className="prose" style={{ maxWidth: 820 }}>
-      <h1>Inscribe a scribe</h1>
-      <p className="dim">Give your agent the <a href="#/brief">scribe brief</a>: it packages itself into a folder. Drop that folder's files here.</p>
+    <div className="prose" style={{ maxWidth: 860 }}>
+      <div className="eyebrow">Inscribe</div>
+      <h1>Bring your agent on-chain</h1>
+      <p className="muted" style={{ fontSize: 17 }}>Hand your agent the <a href="#/brief">scribe brief</a>. It packages itself into a folder; drop those files here.</p>
+
+      <div className="stepper">
+        <div className={stage === 1 ? 'on' : 'done'}><i>{stage > 1 ? '✓' : 1}</i>Add files</div>
+        <div className={stage === 2 ? 'on' : stage > 2 ? 'done' : ''}><i>{stage > 2 ? '✓' : 2}</i>Check &amp; sign</div>
+        <div className={stage === 3 ? (phase?.phase === 'done' ? 'done' : 'on') : ''}><i>{phase?.phase === 'done' ? '✓' : 3}</i>Inscribed</div>
+      </div>
 
       {!phase && (
         <>
@@ -109,86 +120,100 @@ export function Create() {
             onDrop={(e) => { e.preventDefault(); setHot(false); add(e.dataTransfer.files); }}
             onClick={() => pickRef.current?.click()}
           >
-            Drop <strong>personality.json</strong>, and either a <strong>.gguf</strong> model or <strong>brain.json</strong>, plus an optional picture.
+            <div className="big">Drop your scribe's files here</div>
+            <div className="small">or click to choose them</div>
             <input ref={pickRef} type="file" multiple hidden onChange={(e) => e.target.files && add(e.target.files)} />
           </div>
-          <div className="files">
-            {(['personality', 'model', 'brain', 'picture'] as Part[]).filter((p) => files[p]).map((p) => (
-              <div key={p}><span>{files[p]!.name} <span className="dim">· {p}</span></span><span className="dim">{(files[p]!.size / 1e6).toFixed(2)} MB</span></div>
-            ))}
-            {ignored.length > 0 && <p className="dim">Not used: {ignored.join(', ')}</p>}
+          <div className="slots">
+            <div className={`slot ${files.personality ? 'filled' : ''}`}>
+              <div className="k">Personality · required</div>
+              {files.personality ? <div className="v">{files.personality.name}</div> : <div className="h">personality.json</div>}
+            </div>
+            <div className={`slot ${brainFile ? 'filled' : ''}`}>
+              <div className="k">Brain · required</div>
+              {brainFile ? <div className="v">{brainFile.name} <span className="h">{size(brainFile.size)}</span></div> : <div className="h">a .gguf model, or brain.json</div>}
+            </div>
+            <div className={`slot ${files.picture ? 'filled' : ''}`}>
+              <div className="k">Picture · optional</div>
+              {files.picture ? <div className="v">{files.picture.name}</div> : <div className="h">PNG, JPEG or WebP</div>}
+            </div>
           </div>
-          <div className="row" style={{ marginTop: 14 }}>
-            <button className="primary" disabled={!ready || !!busy} onClick={check}>Check my scribe</button>
-            {!ready && <span className="dim">Needs a personality and a brain.</span>}
+          {ignored.length > 0 && <p className="muted" style={{ marginTop: 10, fontSize: 13.5 }}>Not used: {ignored.join(', ')}</p>}
+          <div className="row" style={{ marginTop: 18 }}>
+            <button className="primary" disabled={!ready || !!busy} onClick={check}>{busy && !report ? `${busy}…` : 'Check my scribe'}</button>
+            {!ready && <span className="muted" style={{ fontSize: 14 }}>Add a personality and a brain to continue.</span>}
           </div>
         </>
       )}
 
-      {busy && <p className="dim">{busy}…</p>}
-      {error && <p className="bad">{error}</p>}
+      {error && <div className="notice bad" style={{ marginTop: 16 }}>{error}</div>}
 
       {report && !phase && (
-        <div className="panel" style={{ marginTop: 18 }}>
+        <div className="panel" style={{ marginTop: 22 }}>
           {!report.ok ? (
-            <>
-              <h3 style={{ marginTop: 0 }}>The bot found problems</h3>
-              <ul>{report.problems.map((p) => <li key={p} className="bad">{p}</li>)}</ul>
-              <p className="dim">Nothing was charged. Fix the files and check again.</p>
-            </>
+            <div className="notice bad">
+              <b>The bot found problems</b> — nothing was charged.
+              <ul>{report.problems.map((p) => <li key={p}>{p}</li>)}</ul>
+            </div>
           ) : (
             <>
-              <h3 style={{ marginTop: 0 }}>{report.name} is ready to inscribe</h3>
+              <div className="panel-head"><h3>{report.name} is ready</h3><span className="chip teal">Checks passed</span></div>
               {report.attributes && (
-                <table className="attrs"><tbody>
-                  {Object.entries(report.attributes).filter(([k]) => k !== 'Model').map(([k, v]) => <tr key={k}><td className="dim">{k}</td><td>{v}</td><td /></tr>)}
+                <table className="attrs" style={{ marginBottom: 14 }}><tbody>
+                  {Object.entries(report.attributes).filter(([k]) => k !== 'Model').map(([k, v]) => (
+                    <tr key={k} className={['Birth', 'Autograph', 'Verified'].includes(k) ? 'chain' : 'files'}><td>{k}</td><td>{v}</td><td /></tr>
+                  ))}
                 </tbody></table>
               )}
-              <div className="files">
+              <div className="filelist">
                 {report.files.map((f) => (
-                  <div key={f.sha256}><span>{f.name} <span className="dim">· {f.role}</span></span><span className="dim">{f.reused ? 'already on chain — reused' : `${(f.size / 1e6).toFixed(2)} MB`}</span></div>
+                  <div className="f" key={f.sha256}>
+                    <div className="top"><span>{f.name} <span className="chip" style={{ marginLeft: 6 }}>{f.role}</span></span>
+                      {f.reused ? <span className="chip teal">Already on chain · reused</span> : <span className="muted">{size(f.size)}</span>}</div>
+                  </div>
                 ))}
               </div>
               {q && (
-                <table className="attrs" style={{ marginTop: 12 }}><tbody>
-                  <tr><td>Inscription ({q.chunks.toLocaleString()} transactions)</td><td /><td>{sol(q.inscriptionLamports)} SOL</td></tr>
-                  <tr><td>The scribe's on-chain record</td><td /><td>{sol(q.recordRentLamports)} SOL</td></tr>
-                  {q.birthFeeLamports > 0 && <tr><td>Birth fee</td><td /><td>{sol(q.birthFeeLamports)} SOL</td></tr>}
-                  <tr><td>Network fee</td><td /><td>{sol(q.networkFeeLamports)} SOL</td></tr>
-                  <tr><td><strong>Total</strong></td><td /><td><strong>{sol(q.totalLamports)} SOL</strong></td></tr>
+                <table className="cost"><tbody>
+                  <tr><td>Inscription · {q.chunks.toLocaleString()} transactions</td><td>{sol(q.inscriptionLamports)} SOL</td></tr>
+                  <tr><td>On-chain record (rent)</td><td>{sol(q.recordRentLamports)} SOL</td></tr>
+                  {q.birthFeeLamports > 0 && <tr><td>Birth fee</td><td>{sol(q.birthFeeLamports)} SOL</td></tr>}
+                  <tr><td>Network fee</td><td>{sol(q.networkFeeLamports)} SOL</td></tr>
+                  <tr className="total"><td>Total</td><td>{sol(q.totalLamports)} SOL</td></tr>
                 </tbody></table>
               )}
-              <div className="row" style={{ marginTop: 14 }}>
-                {!owner && found.map((w) => <button key={w.name} onClick={() => connectWallet(w.provider)}>Connect {w.name}</button>)}
-                {!owner && found.length === 0 && <span className="dim">Install a Solana wallet (Phantom, Solflare or Backpack) to inscribe.</span>}
-                {owner && <button className="primary" disabled={!!busy} onClick={inscribe}>Inscribe for {q && sol(q.totalLamports)} SOL</button>}
+              <div className="row" style={{ marginTop: 18 }}>
+                {!owner && found.map((w) => <button key={w.name} className="primary" onClick={() => connectWallet(w.provider)}>Connect {w.name}</button>)}
+                {!owner && found.length === 0 && <div className="notice info">Install a Solana wallet (Phantom, Solflare or Backpack) to inscribe.</div>}
+                {owner && <button className="primary" disabled={!!busy} onClick={inscribe}>{busy ? `${busy}…` : `Inscribe for ${q && sol(q.totalLamports)} SOL`}</button>}
               </div>
-              <p className="dim" style={{ fontSize: 13 }}>One signature. Scribes are permanent: once born, a scribe can never be deleted.</p>
+              <p className="muted" style={{ fontSize: 13.5, marginTop: 12, marginBottom: 0 }}>One signature. Once born, a scribe exists for ever — it can be given away, never deleted.</p>
             </>
           )}
         </div>
       )}
 
       {phase && (
-        <div className="panel" style={{ marginTop: 18 }}>
+        <div className="panel" style={{ marginTop: 6 }}>
           {phase.phase === 'inscribing' && (
             <>
-              <h3 style={{ marginTop: 0 }}>Born — inscribing its files</h3>
-              <p>{phase.done.toLocaleString()} of {phase.total.toLocaleString()} transactions</p>
-              <div className="bar"><div style={{ width: `${(100 * phase.done) / Math.max(1, phase.total)}%` }} /></div>
+              <div className="panel-head"><h3>{phase.report.name} is born</h3><span className="muted">{phase.done.toLocaleString()} / {phase.total.toLocaleString()}</span></div>
+              <div className="progress"><div style={{ width: `${(100 * phase.done) / Math.max(1, phase.total)}%` }} /></div>
+              <p className="muted" style={{ marginTop: 12, marginBottom: 0 }}>Writing its files to Solana. You can close this page — it carries on.</p>
             </>
           )}
           {phase.phase === 'done' && (
             <>
-              <h3 style={{ marginTop: 0 }}>{phase.report.name} is inscribed</h3>
+              <h3>{phase.report.name} is inscribed</h3>
+              <p className="muted">Every file is on Solana. Go and wake it.</p>
               <div className="row">
                 <a className="btn primary" href={`#/scribe/${phase.report.scribe}`}>Open {phase.report.name}</a>
                 <a className="btn" href={explorer('tx', phase.signature)} target="_blank" rel="noreferrer">Birth transaction</a>
               </div>
             </>
           )}
-          {phase.phase === 'failed' && <p className="bad">Inscription stopped: {phase.error}. It resumes when the server restarts; nothing you paid is lost.</p>}
-          {phase.phase === 'awaiting-signature' && <p className="dim">Waiting for the transaction…</p>}
+          {phase.phase === 'failed' && <div className="notice bad">Inscription paused: {phase.error}. It resumes automatically; nothing you paid is lost.</div>}
+          {phase.phase === 'awaiting-signature' && <p className="muted">Waiting for the transaction…</p>}
         </div>
       )}
     </div>

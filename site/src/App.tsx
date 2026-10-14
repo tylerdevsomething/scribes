@@ -4,6 +4,7 @@ import { ScribePage } from './pages/Scribe.tsx';
 import { Create } from './pages/Create.tsx';
 import { BriefPage } from './pages/Brief.tsx';
 import { CLUSTER } from './config.ts';
+import { Mark } from './Sigil.tsx';
 
 function useHash(): string {
   const [h, setH] = useState(location.hash.slice(1) || '/');
@@ -23,23 +24,26 @@ export function App() {
   else if (parts[0] === 'create') page = <Create />;
   else if (parts[0] === 'brief') page = <BriefPage />;
   else page = <Gallery />;
-  const on = (p: string) => (parts[0] ?? '') === p ? 'on' : '';
+  const on = (p: string) => ((parts[0] ?? '') === p || (p === '' && parts[0] === 'scribe') ? 'on' : '');
   return (
     <>
       <header className="top">
         <div className="wrap">
-          <a className="logo" href="#/">scribes<span>.</span></a>
-          <nav>
-            <a className={on('')} href="#/">Scribes</a>
+          <a className="brand" href="#/"><Mark /><b>Scribes</b></a>
+          <nav className="main">
+            <a className={on('')} href="#/">Explore</a>
             <a className={on('create')} href="#/create">Inscribe</a>
-            <a className={on('brief')} href="#/brief">Scribe brief</a>
+            <a className={on('brief')} href="#/brief">Brief</a>
           </nav>
-          {CLUSTER !== 'mainnet' && <span className="pill on"><span>network</span><span>{CLUSTER}</span></span>}
+          {CLUSTER !== 'mainnet' && <span className="net">{CLUSTER}</span>}
         </div>
       </header>
       <main className="wrap">{page}</main>
-      <footer>
-        <div className="wrap">Every scribe's files are inscribed on Solana and checked against their hashes before they run. Anyone can rebuild them from chain.</div>
+      <footer className="site">
+        <div className="wrap">
+          <span>Every scribe is inscribed on Solana and checked against its hashes before it runs.</span>
+          <span>Scribes can never be deleted.</span>
+        </div>
       </footer>
     </>
   );
