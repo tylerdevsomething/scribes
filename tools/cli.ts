@@ -191,4 +191,5 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); });
+// Exit explicitly: confirmation subscriptions keep a websocket open after the work is done.
+main().then(() => process.exit(0), (e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); });
