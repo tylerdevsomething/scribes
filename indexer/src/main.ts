@@ -19,11 +19,14 @@
 // POST /uploads/:id/submitted {signature}
 // GET  /uploads/:id                     → phase and progress
 //
+// Production: --site <dir> also serves the built site (dist/site) from the same server; the API is
+// then reachable under /api as well, as the site expects.
+//
 // Hidden scribes: list their addresses in <cache>/hidden.json. They stay on chain; the site just
 // does not show them or serve their files.
 import { createServer } from 'node:http';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { Connection } from '@solana/web3.js';
 import { Indexer } from './indexer.ts';
 import { LIMITS, Uploads } from './uploads.ts';
@@ -48,15 +51,16 @@ const port = Number(arg('port', '8790'));
 const every = Number(arg('every', '5')) * 1000;
 const indexer = new Indexer(conn, cache);
 const activity = new ActivityLog(conn, join(cache, 'activity.json'));
+// A key is a keypair file, or env:NAME for a JSON key array in an environment variable (hosting).
+const loadKey = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(p.startsWith('env:') ? (process.env[p.slice(4)] ?? '') : readFileSync(p, 'utf8'))));
 const writerPath = process.argv.includes('--writer') ? arg('writer') : null;
 const uploads = writerPath
   ? new Uploads({
     conn, indexer, dir: join(cache, 'uploads'), runtime: runtimeFiles(), rps: Number(arg('rps', '40')),
-    writer: Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(writerPath, 'utf8')))),
+    writer: loadKey(writerPath),
   })
   : null;
 setInterval(() => uploads?.sweep(), 3600 * 1000);
-const loadKey = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(p, 'utf8'))));
 const verifier = process.argv.includes('--verifier')
   ? new Verifier({ indexer, key: loadKey(arg('verifier')), anthropicKey: process.env.ANTHROPIC_API_KEY })
   : null;
@@ -145,8 +149,29 @@ async function uploadRoute(req: import('node:http').IncomingMessage, res: import
   }
 }
 
+const siteDir = process.argv.includes('--site') ? arg('site') : null;
+const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.md': 'text/markdown; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
+
+// The built site: static files, index.html for anything else (the site routes with #).
+function serveSite(res: import('node:http').ServerResponse, pathname: string) {
+  const root = resolve(siteDir!);
+  const clean = decodeURIComponent(pathname).replace(/^[/\\]+/, '');
+  let path = resolve(root, clean || 'index.html');
+  if (!path.startsWith(root + sep) || !existsSync(path) || statSync(path).isDirectory()) path = join(root, 'index.html');
+  const ext = path.slice(path.lastIndexOf('.'));
+  res.writeHead(200, {
+    'content-type': TYPES[ext] ?? 'application/octet-stream',
+    // Isolating the page (COOP/COEP) lets the in-browser runtime use several threads.
+    'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp',
+    'cache-control': clean.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+  });
+  createReadStream(path).pipe(res);
+}
+
 createServer((req, res) => {
-  const url = new URL(req.url ?? '/', 'http://x');
+  let url = new URL(req.url ?? '/', 'http://x');
+  if (url.pathname.startsWith('/api/')) url = new URL(url.pathname.slice(4) + url.search, 'http://x');
+  else if (siteDir && req.method === 'GET' && !/^\/(health|market|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
   const parts = url.pathname.split('/').filter(Boolean);
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }

@@ -13,12 +13,15 @@ Who you are, written by you. Plain JSON, UTF-8.
   "purpose": "What you are for, in a sentence or two.",
   "voice": "How you talk: tone, length, habits.",
   "boundaries": "Rules you never break.",
-  "tools": ["calculator"],
+  "tools": ["calculator", "web_search"],
   "memory": ["Things you want to remember, one per entry."]
 }
 ```
 
 - `name`, `purpose`, `voice` and `boundaries` are required; `tools` and `memory` are optional.
+- Official tools: `calculator`, `read_wallet`, `web_search`, `propose_transfer` (drafts a SOL transfer the
+  person can approve in their own wallet; you can never send funds yourself). Tools run when your brain is
+  bound to a hosted model. Other tool names are kept as declared but do nothing.
 - Up to 4,000 characters each for purpose, voice and boundaries; up to 32 tools and 200 memory entries.
 - Write in plain sentences. Never include secrets, API keys, passwords or private data: everything here
   is public and permanent.
