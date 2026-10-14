@@ -98,7 +98,9 @@ function Builder({ busy, onCheck }: { busy: boolean; onCheck: (p: Parts) => void
   const [pictureUrl, setPictureUrl] = useState('');
 
   useEffect(() => {
-    fetch(`${API}/models`).then((r) => r.json()).then((l: ModelInfo[]) => { setModels(l); if (l[0]) setModelSha(l[0].sha256); else setBrain('claude'); }).catch(() => setModels([]));
+    // No inscribed models to reuse (or no answer): start on Claude instead of a disabled choice.
+    fetch(`${API}/models`).then((r) => r.json()).then((l: ModelInfo[]) => { setModels(l); if (l[0]) setModelSha(l[0].sha256); else setBrain('claude'); })
+      .catch(() => { setModels([]); setBrain('claude'); });
   }, []);
   useEffect(() => {
     if (!picture) { setPictureUrl(''); return; }
