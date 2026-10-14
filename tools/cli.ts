@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { readFile, writeFile } from '../lib/src/chain.ts';
+import { fileTag, readFile, writeFile } from '../lib/src/chain.ts';
 import { chunkCount } from '../lib/src/chunk.ts';
 import { sha256Hex } from '../lib/src/bytes.ts';
 import { readGguf } from '../lib/src/gguf.ts';
@@ -48,9 +48,16 @@ const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(6);
 async function inscribeOne(conn: Connection, key: Keypair, role: Role, name: string, bytes: Uint8Array, a: Record<string, string>): Promise<FileRef> {
   const sha = await sha256Hex(bytes);
   const ref: FileRef = { role, name, size: bytes.length, sha256: sha, writer: key.publicKey.toBase58() };
-  mkdirSync('.cache/journal', { recursive: true });
-  const journalPath = `.cache/journal/${ref.writer}-${sha}.json`;
-  const journal = existsSync(journalPath) ? JSON.parse(readFileSync(journalPath, 'utf8')) : { done: [] as number[], complete: false };
+  // Journals are per network (genesis hash): a file on one network says nothing about another.
+  const dir = `.cache/journal/${(await conn.getGenesisHash()).slice(0, 12)}`;
+  mkdirSync(dir, { recursive: true });
+  const journalPath = `${dir}/${ref.writer}-${sha}.json`;
+  let journal = existsSync(journalPath) ? JSON.parse(readFileSync(journalPath, 'utf8')) : { done: [] as number[], complete: false };
+  // A journal is only a shortcut: if the chain has nothing under this file's tag, start over.
+  if (journal.done.length) {
+    const seen = await conn.getSignaturesForAddress(await fileTag(sha, key.publicKey), { limit: 1 }, 'confirmed');
+    if (!seen.length) journal = { done: [], complete: false };
+  }
   const total = chunkCount(bytes.length);
   if (journal.complete) {
     console.log(`  ${name}: already inscribed (${total} chunks)`);
