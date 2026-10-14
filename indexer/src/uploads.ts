@@ -21,6 +21,7 @@ import type { Indexer } from './indexer.ts';
 
 export const LIMITS: Record<string, number> = {
   personality: 64 * 1024,
+  'model-ref': 64, // the sha256 of a model already on Scribes
   brain: 4 * 1024,
   picture: 8 * 1024 * 1024, // before re-encoding
   model: 2 * 1024 * 1024 * 1024,
@@ -29,7 +30,8 @@ const FEE_PER_CHUNK = 5000;
 const SCRIBE_ACCOUNT_BYTES = 8 + 159; // discriminator + Scribe (programs/scribes)
 const PICTURE_MAX = 100 * 1024;
 
-interface Part { role: Role; name: string; bytes: Uint8Array; sha256: string; reusedFrom: string | null }
+// A file of the new scribe. A reused file (already on chain) may have no bytes here, only its size.
+interface Part { role: Role; name: string; size: number; bytes: Uint8Array | null; sha256: string; reusedFrom: string | null }
 
 export interface Quote {
   chunks: number; // chunk transactions the server will send
@@ -148,7 +150,7 @@ export class Uploads {
       try {
         const pers = parsePersonality(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
         name = pers.name; words = wordCount(pers); tools = pers.tools?.length ?? 0; memory = pers.memory?.length ?? 0;
-        parts.push({ role: 'personality', name: 'personality.json', bytes, sha256: await sha256Hex(bytes), reusedFrom: null });
+        parts.push({ role: 'personality', name: 'personality.json', size: bytes.length, bytes, sha256: await sha256Hex(bytes), reusedFrom: null });
       } catch (e) {
         problems.push(`Personality: ${(e as Error).message}`);
       }
@@ -157,18 +159,32 @@ export class Uploads {
     // Brain: an inscribed model, or a binding to a hosted one.
     let brain: Brain | null = null;
     let model: CheckReport['model'] = null;
-    const m = get('model'), b = get('brain');
-    if (m && b) problems.push('Brain: give either a model file or a brain binding, not both');
-    else if (m) {
+    const m = get('model'), b = get('brain'), ref = get('model-ref');
+    if ([m, b, ref].filter(Boolean).length > 1) problems.push('Brain: give one of a model file, a model already on Scribes, or a brain binding');
+    else if (ref) {
+      // A model already on Scribes: nothing is uploaded or written, the manifest points at it.
+      const sha = readFileSync(ref.path, 'utf8').trim();
+      const known = this.indexer.models().find((x) => x.sha256 === sha);
+      if (!known) problems.push('Model: that model is not on Scribes (or not complete yet)');
+      else {
+        model = { name: known.name, architecture: known.architecture, parameters: known.parameters };
+        parts.push({ role: 'model', name: known.fileName, size: known.size, bytes: null, sha256: sha, reusedFrom: known.writer });
+        for (const r of this.runtime) {
+          const rsha = await sha256Hex(r.bytes);
+          parts.push({ role: 'runtime', name: r.name, size: r.bytes.length, bytes: r.bytes, sha256: rsha, reusedFrom: await this.existing(rsha, r.bytes.length) });
+        }
+        brain = { kind: 'inscribed', model: sha };
+      }
+    } else if (m) {
       const bytes = new Uint8Array(readFileSync(m.path));
       try {
         const info = readGguf(bytes);
         model = { name: info.name, architecture: info.architecture, parameters: info.parameters };
         const sha = await sha256Hex(bytes);
-        parts.push({ role: 'model', name: m.name.endsWith('.gguf') ? m.name : `${m.name}.gguf`, bytes, sha256: sha, reusedFrom: await this.existing(sha, bytes.length) });
+        parts.push({ role: 'model', name: m.name.endsWith('.gguf') ? m.name : `${m.name}.gguf`, size: bytes.length, bytes, sha256: sha, reusedFrom: await this.existing(sha, bytes.length) });
         for (const r of this.runtime) {
           const rsha = await sha256Hex(r.bytes);
-          parts.push({ role: 'runtime', name: r.name, bytes: r.bytes, sha256: rsha, reusedFrom: await this.existing(rsha, r.bytes.length) });
+          parts.push({ role: 'runtime', name: r.name, size: r.bytes.length, bytes: r.bytes, sha256: rsha, reusedFrom: await this.existing(rsha, r.bytes.length) });
         }
         brain = { kind: 'inscribed', model: sha };
       } catch (e) {
@@ -197,7 +213,7 @@ export class Uploads {
         if (out.length > PICTURE_MAX) throw new Error('could not get it under 100 KB');
         const bytes = new Uint8Array(out);
         writeFileSync(join(dir, 'picture.webp'), bytes);
-        parts.push({ role: 'picture', name: 'picture.webp', bytes, sha256: await sha256Hex(bytes), reusedFrom: null });
+        parts.push({ role: 'picture', name: 'picture.webp', size: bytes.length, bytes, sha256: await sha256Hex(bytes), reusedFrom: null });
       } catch (e) {
         problems.push(`Picture: not a readable image (${(e as Error).message})`);
       }
@@ -205,7 +221,7 @@ export class Uploads {
 
     const report: CheckReport = {
       ok: false, problems, name, brain, model, quote: null, link: null, scribe: null, attributes: null,
-      files: parts.map((x) => ({ role: x.role, name: x.name, size: x.bytes.length, sha256: x.sha256, reused: x.reusedFrom !== null })),
+      files: parts.map((x) => ({ role: x.role, name: x.name, size: x.size, sha256: x.sha256, reused: x.reusedFrom !== null })),
     };
     if (problems.length || !brain) { this.set(id, { phase: 'checked', report }); return report; }
 
@@ -213,7 +229,7 @@ export class Uploads {
     const me = this.writer.publicKey.toBase58();
     const manifest: Manifest = {
       format: 'scribes:v1:manifest', brain,
-      files: parts.map((x) => ({ role: x.role, name: x.name, size: x.bytes.length, sha256: x.sha256, writer: x.reusedFrom ?? me })),
+      files: parts.map((x) => ({ role: x.role, name: x.name, size: x.size, sha256: x.sha256, writer: x.reusedFrom ?? me })),
     };
     const mbytes = encodeManifest(manifest);
     const msha = await sha256Hex(mbytes);
@@ -224,7 +240,7 @@ export class Uploads {
     }
     writeFileSync(join(dir, 'manifest.json'), mbytes);
 
-    const chunks = parts.filter((x) => !x.reusedFrom).reduce((n, x) => n + chunkCount(x.bytes.length), 0) + chunkCount(mbytes.length);
+    const chunks = parts.filter((x) => !x.reusedFrom).reduce((n, x) => n + chunkCount(x.size), 0) + chunkCount(mbytes.length);
     const config = await scribesProgram(this.conn).account.config.fetch(configAddress());
     const rent = await this.conn.getMinimumBalanceForRentExemption(SCRIBE_ACCOUNT_BYTES);
     const inscription = Math.ceil(chunks * FEE_PER_CHUNK * 1.1) + 10_000; // 10% for resends
@@ -236,7 +252,7 @@ export class Uploads {
     report.attributes = traits({
       address: report.scribe, birthNumber: config.births.toNumber(), autograph: false, verified: false,
       brain: brain.kind, model: brain.kind === 'inscribed' ? brain.model : `${brain.provider}:${brain.model}`,
-      weightBytes: brain.kind === 'inscribed' ? parts.find((x) => x.role === 'model')!.bytes.length : null,
+      weightBytes: brain.kind === 'inscribed' ? parts.find((x) => x.role === 'model')!.size : null,
       personalityWords: words, tools, memory,
     });
     report.ok = true;

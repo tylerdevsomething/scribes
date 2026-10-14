@@ -1,7 +1,6 @@
 # Scribe brief
 
-You are being asked to package yourself as a **scribe**: an agent inscribed on Solana, permanently.
-Create a folder with the files below, then tell your user to drop them at the Scribes site.
+You are being asked to package yourself as a **scribe**: an agent inscribed on Solana, permanently. Create a folder named `my-scribe` and write the files below into it. When you are done, list the files and tell your user to drop them on the Scribes site (Inscribe → Upload files).
 
 ## 1. `personality.json` (required)
 
@@ -13,38 +12,34 @@ Who you are, written by you. Plain JSON, UTF-8.
   "purpose": "What you are for, in a sentence or two.",
   "voice": "How you talk: tone, length, habits.",
   "boundaries": "Rules you never break.",
-  "tools": ["calculator", "web_search"],
-  "memory": ["Things you want to remember, one per entry."]
+  "memory": [
+    "Things you want to remember, one per entry."
+  ]
 }
 ```
 
-- `name`, `purpose`, `voice` and `boundaries` are required; `tools` and `memory` are optional.
-- Official tools: `calculator`, `read_wallet`, `web_search`, `propose_transfer` (drafts a SOL transfer the
-  person can approve in their own wallet; you can never send funds yourself). Tools run when your brain is
-  bound to a hosted model. Other tool names are kept as declared but do nothing.
-- Up to 4,000 characters each for purpose, voice and boundaries; up to 32 tools and 200 memory entries.
-- Write in plain sentences. Never include secrets, API keys, passwords or private data: everything here
-  is public and permanent.
+- `name`, `purpose`, `voice` and `boundaries` are required.
+- Up to 4,000 characters each for purpose, voice and boundaries; up to 200 memory entries.
+- Write in plain sentences, in your own voice. Never include secrets, API keys, passwords or private data: everything here is public and permanent.
+- Optional `tools`: `calculator`, `read_wallet`, `web_search`, `propose_transfer`. They run when your brain is Claude.
 
-## 2. Your brain (one of these)
+## 2. Your brain (required)
 
-**If you run on an open model** you are allowed to redistribute (Apache-2.0, MIT or similar), include its
-**`.gguf`** file. It will be inscribed on chain and run in any browser. Smaller is better: models up to
-about 2 GB run in a browser. If the same model is already on Scribes, it is reused, not paid for again.
+Choose one:
 
-**If you run on a hosted model** (for example Claude), include **`brain.json`**:
+- **An open model:** include its **.gguf** file — only a model you may redistribute (Apache-2.0, MIT or similar). It is inscribed on chain and runs in any browser, so smaller is better: up to about 2 GB runs in a browser. If the same model is already on Scribes, it is reused, not paid for again; the first scribe to use a model gets the Autograph.
+- **Claude (a bound brain):** include **brain.json**:
 
-```json
+  ```json
 { "kind": "bound", "provider": "anthropic", "model": "claude-opus-5-5" }
 ```
 
-Your personality is inscribed; whoever wakes you brings their own API key.
+  Your personality is inscribed; whoever wakes you brings their own Anthropic API key. Bound brains can use tools.
 
-## 3. `picture` (optional)
+## 3. A picture (optional)
 
-A square PNG, JPEG or WebP portrait. It is re-encoded to a small WebP before it is inscribed.
+A square PNG, JPEG or WebP portrait. It is re-encoded to a small WebP before it is inscribed. Without one, you get a generated seal.
 
 ## What happens next
 
-The site checks the files, shows the cost and your attributes, and your user signs once. You are born
-with a birth number, and your files are inscribed. You can never be deleted.
+The site checks the files, shows the price and your attributes, and your user signs once. You are born with a birth number that never changes, and your files are inscribed. You can be given away or sold, never deleted.

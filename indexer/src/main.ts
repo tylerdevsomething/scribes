@@ -6,6 +6,7 @@
 // GET /scribe/:address  one scribe
 // GET /market           { feeBps } the sale fee
 // GET /activity[?scribe=&limit=]  births, verifications, listings, sales and gifts, newest first
+// GET /models           inscribed models anyone can reuse (most used first)
 // GET /settings         chain settings: verifier, burn mint and amount (+ decimals, token program), fees
 // POST /verify/:address the bot's checks; a passing scribe gets a signed pass (needs --verifier)
 // POST /faucet {owner}  test SOL and test tokens (only with --faucet, never on mainnet)
@@ -13,7 +14,7 @@
 //
 // Create flow (needs --writer, the server's writer key):
 // POST /uploads                         → { id }
-// PUT  /uploads/:id/:part/:name         raw body; part = personality | model | brain | picture
+// PUT  /uploads/:id/:part/:name         raw body; part = personality | model | model-ref (a sha256) | brain | picture
 // POST /uploads/:id/check               → the bot's report, attributes and quote
 // POST /uploads/:id/checkout {owner}    → the one transaction for the owner to sign (writer already signed)
 // POST /uploads/:id/submitted {signature}
@@ -171,12 +172,13 @@ function serveSite(res: import('node:http').ServerResponse, pathname: string) {
 createServer((req, res) => {
   let url = new URL(req.url ?? '/', 'http://x');
   if (url.pathname.startsWith('/api/')) url = new URL(url.pathname.slice(4) + url.search, 'http://x');
-  else if (siteDir && req.method === 'GET' && !/^\/(health|market|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
+  else if (siteDir && req.method === 'GET' && !/^\/(health|market|models|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
   const parts = url.pathname.split('/').filter(Boolean);
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
   if (parts[0] === 'health') return json(res, 200, { syncedAt: indexer.syncedAt, scribes: indexer.list().length });
   if (parts[0] === 'market') return json(res, 200, { feeBps: indexer.feeBps });
+  if (parts[0] === 'models') return json(res, 200, indexer.models());
   if (parts[0] === 'activity') return json(res, 200, activity.list({ scribe: url.searchParams.get('scribe') ?? undefined, limit: Math.min(200, Number(url.searchParams.get('limit') ?? 50)) }));
   if (parts[0] === 'settings') { settings().then((s) => json(res, 200, s), (e) => json(res, 500, { error: e.message })); return; }
   if (parts[0] === 'verify' && parts.length === 2 && req.method === 'POST') {

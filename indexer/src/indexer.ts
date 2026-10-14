@@ -39,6 +39,12 @@ interface Entry {
   invalid: string | null;
 }
 
+export interface ModelInfo {
+  sha256: string; size: number; writer: string; fileName: string;
+  name: string | null; architecture: string | null; parameters: number;
+  scribes: number; firstScribe: string;
+}
+
 export class Indexer {
   private entries = new Map<string, Entry>();
   private collectors = new Map<string, FileCollector>(); // shared: the same file under many scribes is read once
@@ -198,6 +204,25 @@ export class Indexer {
   // The scribe's parsed personality, once its files are complete.
   personality(address: string): Personality | null {
     return this.entries.get(address)?.personality ?? null;
+  }
+
+  // Every model inscribed completely by some valid scribe, with how many scribes use it (for reuse).
+  models(): ModelInfo[] {
+    const out = new Map<string, ModelInfo>();
+    for (const e of [...this.entries.values()].sort((a, b) => a.record.birthNumber - b.record.birthNumber)) {
+      if (e.invalid || !e.decoded || !e.gguf || e.decoded.brain.kind !== 'inscribed') continue;
+      const sha = e.decoded.brain.model;
+      const f = e.decoded.files.find((x) => x.sha256 === sha)!;
+      if (!e.files.get(sha)?.complete) continue;
+      const m = out.get(sha);
+      if (m) { m.scribes++; continue; }
+      out.set(sha, {
+        sha256: sha, size: f.size, writer: f.writer, fileName: f.name,
+        name: e.gguf.name, architecture: e.gguf.architecture, parameters: e.gguf.parameters,
+        scribes: 1, firstScribe: e.record.address,
+      });
+    }
+    return [...out.values()].sort((a, b) => b.scribes - a.scribes);
   }
 
   // The writer of a complete, checked copy of this file on chain, if any (so uploads can reuse it).
