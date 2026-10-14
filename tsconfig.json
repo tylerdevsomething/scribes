@@ -12,5 +12,5 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["lib", "tools", "runner/src", "runner/vite.config.ts"]
+  "include": ["lib", "tools", "indexer/src", "runner/src", "runner/vite.config.ts"]
 }

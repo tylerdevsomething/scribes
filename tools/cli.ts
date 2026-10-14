@@ -5,16 +5,19 @@
 //   node tools/cli.ts inscribe --key <keypair.json> --rpc <url> --personality <file.json>
 //                              (--model <file.gguf> | --bound <provider>:<model>) [--rps 10] [--price 0]
 //   node tools/cli.ts rebuild  --link <scribes:v1:...> --rpc <url> [--out .cache/files]
+//   node tools/cli.ts init     --key <upgrade authority.json> --rpc <url> [--verifier <pk>] [--fee-receiver <pk>] [--fee <lamports>]
+//   (inscribe registers the scribe with the program at the end; --no-birth skips that)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
-import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
 import { fileTag, readFile, writeFile } from '../lib/src/chain.ts';
 import { chunkCount } from '../lib/src/chunk.ts';
 import { sha256Hex } from '../lib/src/bytes.ts';
 import { readGguf } from '../lib/src/gguf.ts';
 import { decodeManifest, encodeManifest, formatLink, parseLink, type Brain, type FileRef, type Manifest, type Role } from '../lib/src/manifest.ts';
 import { parsePersonality } from '../lib/src/personality.ts';
+import { ZERO_SHA, birthInstruction, configAddress, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
 
 function args(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -140,6 +143,38 @@ async function main() {
     const after = await conn.getBalance(key.publicKey);
     console.log(`spent ${sol(before - after)} SOL`);
     console.log(`\nscribe link: ${formatLink({ writer: mref.writer, sha256: mref.sha256, size: mref.size })}`);
+    if (a['no-birth'] !== 'true') {
+      const program = scribesProgram(conn);
+      const scribe = scribeAddress(mref.sha256);
+      if (await conn.getAccountInfo(scribe)) {
+        console.log(`scribe ${scribe.toBase58()} is already born`);
+      } else {
+        const ix = await birthInstruction(program, {
+          owner: key.publicKey, writer: key.publicKey, manifestSha: mref.sha256, manifestSize: mref.size,
+          modelSha: brain.kind === 'inscribed' ? brain.model : ZERO_SHA,
+        });
+        const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
+        const s = await program.account.scribe.fetch(scribe);
+        console.log(`born: scribe ${scribe.toBase58()} · #${s.birthNumber.toNumber() + 1}${s.autograph ? ' · Autograph' : ''} · ${sig}`);
+      }
+    }
+  } else if (cmd === 'init') {
+    const conn = new Connection(need(a, 'rpc'), 'confirmed');
+    const key = loadKey(need(a, 'key'));
+    const program = scribesProgram(conn);
+    const programData = PublicKey.findProgramAddressSync([program.programId.toBuffer()], new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111'))[0];
+    const settings = settingsArg({
+      admin: key.publicKey,
+      verifier: new PublicKey(a.verifier ?? key.publicKey.toBase58()),
+      feeReceiver: new PublicKey(a['fee-receiver'] ?? key.publicKey.toBase58()),
+      birthFee: Number(a.fee ?? 0),
+      burnMint: PublicKey.default,
+      burnAmount: 0n,
+    });
+    const ix = await program.methods.initialize(settings)
+      .accountsPartial({ payer: key.publicKey, config: configAddress(), program: program.programId, programData }).instruction();
+    const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
+    console.log(`settings created: ${configAddress().toBase58()} · ${sig}`);
   } else if (cmd === 'rebuild') {
     const conn = new Connection(need(a, 'rpc'), 'confirmed');
     const link = parseLink(need(a, 'link'));
@@ -160,7 +195,7 @@ async function main() {
     }
     console.log(`rebuilt and checked ${manifest.files.length + 1} files in ${((Date.now() - t0) / 1000).toFixed(0)} s → ${out}`);
   } else {
-    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 9).join('\n'));
+    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1).join('\n').split(/\n(?!\/\/)/)[0]);
     process.exit(cmd ? 1 : 0);
   }
 }

@@ -62,57 +62,87 @@ async function retry<T>(fn: () => Promise<T>, tries = 6): Promise<T> {
   }
 }
 
-// Rebuilds a file from chain and checks it against its size and sha256.
-export async function readFile(
-  conn: Connection, ref: { sha256: string; size: number; writer: string }, opts: ReadOptions = {},
-): Promise<Uint8Array> {
-  const program = opts.program ?? INK_PROGRAM;
-  const commitment = opts.commitment ?? 'confirmed';
-  const writer = new PublicKey(ref.writer);
-  const tag = await fileTag(ref.sha256, writer);
-  const total = chunkCount(ref.size);
+export interface FileRefLike { sha256: string; size: number; writer: string }
 
-  const sigs: TransactionSignature[] = [];
-  for (let before: string | undefined; ;) {
-    const page = await retry(() => conn.getSignaturesForAddress(tag, { before, limit: 1000 }, commitment));
-    for (const s of page) if (!s.err) sigs.push(s.signature);
-    if (page.length < 1000) break;
-    before = page[page.length - 1].signature;
+// Gathers one file's chunks from chain. poll() can be called again and again while the file is still
+// being inscribed: each call only reads transactions newer than the last one it saw.
+export class FileCollector {
+  readonly ref: FileRefLike;
+  readonly total: number;
+  found = 0;
+  private chunks: (Uint8Array | undefined)[];
+  private newest: string | undefined;
+  private writer: PublicKey;
+  private tag: PublicKey | undefined;
+  private program: PublicKey;
+
+  constructor(ref: FileRefLike, program: PublicKey = INK_PROGRAM) {
+    this.ref = ref;
+    this.total = chunkCount(ref.size);
+    this.chunks = new Array(this.total);
+    this.writer = new PublicKey(ref.writer);
+    this.program = program;
   }
 
-  const chunks: (Uint8Array | undefined)[] = new Array(total);
-  let found = 0;
-  await pool(sigs, opts.concurrency ?? 8, async (sig) => {
-    const tx = await retry(() => conn.getTransaction(sig, { commitment, maxSupportedTransactionVersion: 0 }));
-    if (!tx || tx.meta?.err) return;
-    const msg = tx.transaction.message;
-    const keys = msg.staticAccountKeys;
-    if (!keys[0].equals(writer)) return; // not signed by the writer: ignored
-    for (const ix of msg.compiledInstructions) {
-      if (!keys[ix.programIdIndex]?.equals(program)) continue;
-      if (!ix.accountKeyIndexes.some((k) => keys[k]?.equals(tag))) continue;
-      const c = decodeChunk(ix.data);
-      if (!c || c.index >= total) continue;
-      const want = c.index === total - 1 ? ref.size - c.index * CHUNK_BYTES : CHUNK_BYTES;
-      if (c.bytes.length !== want) throw new Error(`chunk ${c.index} has the wrong length`);
-      const have = chunks[c.index];
-      if (have) {
-        if (have.length !== c.bytes.length || have.some((v, i) => v !== c.bytes[i])) {
-          throw new Error(`the writer signed two different versions of chunk ${c.index}`);
-        }
-        continue;
-      }
-      chunks[c.index] = c.bytes.slice();
-      found++;
-      opts.onProgress?.({ done: found, total });
-    }
-  }, () => found === total);
+  get complete(): boolean { return this.found === this.total; }
 
-  if (found !== total) throw new Error(`only ${found} of ${total} chunks are on chain`);
-  const file = concat(...(chunks as Uint8Array[]));
-  if (file.length !== ref.size) throw new Error('rebuilt file has the wrong size');
-  if ((await sha256Hex(file)) !== ref.sha256) throw new Error('rebuilt file does not match its sha256');
-  return file;
+  async poll(conn: Connection, opts: { concurrency?: number; commitment?: 'confirmed' | 'finalized'; onProgress?: (p: Progress) => void } = {}): Promise<void> {
+    if (this.complete) return;
+    const commitment = opts.commitment ?? 'confirmed';
+    this.tag ??= await fileTag(this.ref.sha256, this.writer);
+    const tag = this.tag;
+    const sigs: TransactionSignature[] = [];
+    let top: string | undefined;
+    for (let before: string | undefined; ;) {
+      const page = await retry(() => conn.getSignaturesForAddress(tag, { before, until: this.newest, limit: 1000 }, commitment));
+      top ??= page[0]?.signature;
+      for (const s of page) if (!s.err) sigs.push(s.signature);
+      if (page.length < 1000) break;
+      before = page[page.length - 1].signature;
+    }
+    await pool(sigs, opts.concurrency ?? 8, async (sig) => {
+      const tx = await retry(() => conn.getTransaction(sig, { commitment, maxSupportedTransactionVersion: 0 }));
+      if (!tx || tx.meta?.err) return;
+      const msg = tx.transaction.message;
+      const keys = msg.staticAccountKeys;
+      if (!keys[0].equals(this.writer)) return; // not signed by the writer: ignored
+      for (const ix of msg.compiledInstructions) {
+        if (!keys[ix.programIdIndex]?.equals(this.program)) continue;
+        if (!ix.accountKeyIndexes.some((k) => keys[k]?.equals(tag))) continue;
+        const c = decodeChunk(ix.data);
+        if (!c || c.index >= this.total) continue;
+        const want = c.index === this.total - 1 ? this.ref.size - c.index * CHUNK_BYTES : CHUNK_BYTES;
+        if (c.bytes.length !== want) throw new Error(`chunk ${c.index} has the wrong length`);
+        const have = this.chunks[c.index];
+        if (have) {
+          if (have.length !== c.bytes.length || have.some((v, i) => v !== c.bytes[i])) {
+            throw new Error(`the writer signed two different versions of chunk ${c.index}`);
+          }
+          continue;
+        }
+        this.chunks[c.index] = c.bytes.slice();
+        this.found++;
+        opts.onProgress?.({ done: this.found, total: this.total });
+      }
+    }, () => this.complete);
+    if (top) this.newest = top;
+  }
+
+  // The whole file, checked against its size and sha256.
+  async bytes(): Promise<Uint8Array> {
+    if (!this.complete) throw new Error(`only ${this.found} of ${this.total} chunks are on chain`);
+    const file = concat(...(this.chunks as Uint8Array[]));
+    if (file.length !== this.ref.size) throw new Error('rebuilt file has the wrong size');
+    if ((await sha256Hex(file)) !== this.ref.sha256) throw new Error('rebuilt file does not match its sha256');
+    return file;
+  }
+}
+
+// Rebuilds a file from chain and checks it against its size and sha256.
+export async function readFile(conn: Connection, ref: FileRefLike, opts: ReadOptions = {}): Promise<Uint8Array> {
+  const c = new FileCollector(ref, opts.program);
+  await c.poll(conn, opts);
+  return c.bytes();
 }
 
 // ---- writing ----------------------------------------------------------------------------------

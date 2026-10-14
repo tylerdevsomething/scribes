@@ -9,7 +9,7 @@ const BANNED = ['c2VxdWVudHM=', 'cHJvb2Y=', 'c3RyaWtl', 'ZW52ZWxvcGU=', 'dmF1bHQ
 // Platform identifiers we cannot rename (third-party APIs). Keep this list short.
 const ALLOWED = [
   'isOnCurve', 'location.origin', 'remote add origin', 'push -u origin',
-  'Cross-Origin-Opener-Policy', 'Cross-Origin-Embedder-Policy', 'cross-origin-resource-policy', 'crossOriginIsolated', 'same-origin',
+  'Cross-Origin-Opener-Policy', 'Cross-Origin-Embedder-Policy', 'cross-origin-resource-policy', 'crossOriginIsolated', 'same-origin', 'access-control-allow-origin',
 ];
 
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' })
