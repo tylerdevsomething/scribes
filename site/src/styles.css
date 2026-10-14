@@ -275,3 +275,11 @@ ul.feed li.sold i { background: var(--tan-soft); color: var(--tan); }
 ul.feed .what { flex: 1; min-width: 0; }
 ul.feed .what a { color: var(--ink); }
 ul.feed .when { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+
+/* ---- proposals ---- */
+.proposal { align-self: stretch; border: 1.5px solid #ecd6b4; background: var(--tan-soft); border-radius: 14px; padding: 14px 16px; }
+.proposal .k { font: 600 11px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--tan); margin-bottom: 8px; }
+.proposal .amt { font: 600 20px/1.3 var(--serif); }
+.proposal .amt span { font: 400 14px var(--sans); color: var(--muted); }
+.proposal .amt code { font-size: 12px; }
+.proposal .note { font-style: italic; color: var(--ink-2); margin-top: 4px; }

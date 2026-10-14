@@ -10,6 +10,10 @@ import { Badges, Capsule, Portrait, brainLine } from './Gallery.tsx';
 import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
 import { describeError, loadBound } from '../run/bound.ts';
+import { enabledTools, type Proposal } from '../run/tools.ts';
+import { SystemProgram, PublicKey } from '@solana/web3.js';
+import { sendInstructions, useWallet } from '../wallet.ts';
+import { WalletButton } from '../WalletButton.tsx';
 import { MarketPanel } from './Market.tsx';
 import { VerifyPanel } from './Verify.tsx';
 import { ActivityList, useActivity } from './Activity.tsx';
@@ -209,11 +213,48 @@ function Wake({ s }: { s: ScribeView }) {
   );
 }
 
+function ProposalCard({ p, name, update }: { p: Proposal & { state: string; sig?: string; error?: string }; name: string; update: (x: Partial<{ state: 'open' | 'sent' | 'declined'; sig: string; error: string }>) => void }) {
+  const me = useWallet();
+  const [busy, setBusy] = useState(false);
+  async function approve() {
+    if (!me) return;
+    setBusy(true);
+    try {
+      const sig = await sendInstructions([SystemProgram.transfer({ fromPubkey: new PublicKey(me), toPubkey: new PublicKey(p.to), lamports: p.lamports })]);
+      update({ state: 'sent', sig });
+    } catch (e) {
+      update({ error: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="proposal">
+      <div className="k">{name} proposes a transfer</div>
+      <div className="amt">{p.lamports / 1e9} SOL <span>to</span> <code>{p.to}</code></div>
+      <div className="note">“{p.note}”</div>
+      {p.state === 'open' && (
+        <div className="row" style={{ marginTop: 10 }}>
+          {me ? <button className="primary small" disabled={busy} onClick={approve}>{busy ? 'Approve in your wallet…' : 'Approve in my wallet'}</button> : <WalletButton />}
+          <button className="small" onClick={() => update({ state: 'declined' })}>Decline</button>
+        </div>
+      )}
+      {p.state === 'sent' && <div className="notice info" style={{ marginTop: 10 }}>Sent. <a href={explorer('tx', p.sig!)} target="_blank" rel="noreferrer">View transaction</a></div>}
+      {p.state === 'declined' && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>Declined — nothing was sent.</div>}
+      {p.error && <div className="notice bad" style={{ marginTop: 10 }}>{p.error}</div>}
+      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Scribes can only propose. Nothing moves unless you approve it in your own wallet.</div>
+    </div>
+  );
+}
+
 function Chat({ brain, personality }: { brain: Brain; personality: Personality }) {
   const [history, setHistory] = useState<Turn[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
+  const [proposals, setProposals] = useState<(Proposal & { state: 'open' | 'sent' | 'declined'; sig?: string; error?: string; at: number })[]>([]);
+  const tools = brain.usesTools ? enabledTools(personality.tools) : [];
+  const declared = (personality.tools ?? []).filter((t) => !tools.some((x) => x.replace('_', '') === t.toLowerCase().replace(/[^a-z]/g, '')));
   const logRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [history, pending]);
@@ -229,7 +270,10 @@ function Chat({ brain, personality }: { brain: Brain; personality: Personality }
     setPending('');
     abortRef.current = new AbortController();
     try {
-      const reply = await brain.reply(systemPrompt(personality), next, (t) => setPending(t), abortRef.current.signal);
+      const at = next.length;
+      const reply = await brain.reply(systemPrompt(personality), next, (t) => setPending(t), abortRef.current.signal, {
+        tools, propose: (p) => setProposals((l) => [...l, { ...p, state: 'open', at }]),
+      });
       setHistory([...next, { role: 'assistant', content: reply }]);
     } catch (e) {
       setHistory(history); // the failed turn is not kept
@@ -242,11 +286,22 @@ function Chat({ brain, personality }: { brain: Brain; personality: Personality }
   return (
     <div className="chat">
       <div className="label">{brain.label}</div>
+      {(tools.length > 0 || declared.length > 0) && (
+        <div className="badges" style={{ marginBottom: 12 }}>
+          {tools.map((t) => <span key={t} className="chip teal">⚙ {t.replace('_', ' ')}</span>)}
+          {declared.map((t) => <span key={t} className="chip" title="Declared by the scribe; not an official tool, so it does nothing">{t} · declared</span>)}
+        </div>
+      )}
       <div className="log" ref={logRef}>
         {history.length === 0 && pending === null && <div className="muted" style={{ fontSize: 14 }}>Say hello to {personality.name}.</div>}
         {history.map((t, i) => (
-          <div key={i} className={`bubble ${t.role === 'user' ? 'you' : 'them'}`}>
-            {t.role === 'assistant' && <span className="who">{personality.name}</span>}{t.content}
+          <div key={i} style={{ display: 'contents' }}>
+            <div className={`bubble ${t.role === 'user' ? 'you' : 'them'}`}>
+              {t.role === 'assistant' && <span className="who">{personality.name}</span>}{t.content}
+            </div>
+            {proposals.filter((p) => p.at === i + 1 && t.role === 'user').map((p) => (
+              <ProposalCard key={p.id} p={p} name={personality.name} update={(x) => setProposals((l) => l.map((y) => (y.id === p.id ? { ...y, ...x } : y)))} />
+            ))}
           </div>
         ))}
         {pending !== null && <div className="bubble them"><span className="who">{personality.name}</span>{pending || '…'}</div>}

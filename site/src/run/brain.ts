@@ -1,9 +1,15 @@
 // A scribe's brain, whichever kind: the chat only needs to send the history and stream the reply.
 export interface Turn { role: 'user' | 'assistant'; content: string }
 
+export interface ReplyContext {
+  tools: string[]; // official tools this scribe may use
+  propose: (p: import('./tools.ts').Proposal) => void; // a drafted transfer for the viewer to approve
+}
+
 export interface Brain {
   label: string; // shown under the chat, e.g. "SmolLM2 135M · in this browser"
-  reply(system: string, history: Turn[], onText: (soFar: string) => void, signal: AbortSignal): Promise<string>;
+  usesTools?: boolean;
+  reply(system: string, history: Turn[], onText: (soFar: string) => void, signal: AbortSignal, ctx?: ReplyContext): Promise<string>;
 }
 
 // Small models fall into loops: detect a sentence said three times, and cut a reply back to its first pass.
