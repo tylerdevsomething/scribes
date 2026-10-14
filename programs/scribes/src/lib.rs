@@ -2,7 +2,8 @@
 //
 // A scribe's files live in transaction data (see lib/src/chain.ts); this program records who owns each
 // scribe, its birth number, whether it was the first scribe to use its model (the Autograph), and
-// whether it was verified. There is no close instruction: a scribe, once born, exists for ever.
+// whether it was verified, and its sale listings. Nothing closes a scribe: once born, it exists for
+// ever. (A listing is a separate small account; it is closed when it is cancelled or bought.)
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{ed25519_program, sysvar::instructions as ix_sysvar};
 use anchor_lang::system_program::{self, Allocate, Assign, CreateAccount, Transfer};
@@ -113,7 +114,69 @@ pub mod scribes {
         emit!(Given { scribe: s.key(), from, to: new_owner });
         Ok(())
     }
+
+    /// Sets the marketplace sale fee (basis points of the price, paid to the fee receiver). Admin only.
+    pub fn set_market(ctx: Context<SetMarket>, fee_bps: u16) -> Result<()> {
+        require!(fee_bps <= MAX_FEE_BPS, ScribeError::FeeTooHigh);
+        let m = &mut ctx.accounts.market;
+        m.fee_bps = fee_bps;
+        m.bump = ctx.bumps.market;
+        Ok(())
+    }
+
+    /// Lists a scribe for sale at a price in lamports (listing again changes the price).
+    /// Nothing moves: the scribe stays with its owner until someone buys it.
+    pub fn list(ctx: Context<List>, price: u64) -> Result<()> {
+        require!(price > 0, ScribeError::BadPrice);
+        let l = &mut ctx.accounts.listing;
+        l.scribe = ctx.accounts.scribe.key();
+        l.seller = ctx.accounts.owner.key();
+        l.price = price;
+        l.bump = ctx.bumps.listing;
+        emit!(Listed { scribe: l.scribe, seller: l.seller, price });
+        Ok(())
+    }
+
+    /// Takes a listing down. The owner can always do it; anyone can clear a listing whose seller no
+    /// longer owns the scribe (it was given away). The listing's rent goes back to the seller.
+    pub fn cancel(ctx: Context<Cancel>) -> Result<()> {
+        let l = &ctx.accounts.listing;
+        let owner = ctx.accounts.scribe.owner;
+        require!(ctx.accounts.signer.key() == owner || l.seller != owner, ScribeError::NotOwner);
+        emit!(Unlisted { scribe: l.scribe });
+        Ok(())
+    }
+
+    /// Buys a listed scribe: the price goes to the seller minus the sale fee, and the scribe is the
+    /// buyer's. `max_price` protects the buyer from a price raised just before their transaction lands.
+    pub fn buy(ctx: Context<Buy>, max_price: u64) -> Result<()> {
+        let l = &ctx.accounts.listing;
+        require!(l.seller == ctx.accounts.scribe.owner, ScribeError::StaleListing);
+        require!(l.price <= max_price, ScribeError::PriceChanged);
+        require!(ctx.accounts.buyer.key() != l.seller, ScribeError::BadOwner);
+        let fee = (l.price as u128 * ctx.accounts.market.fee_bps as u128 / 10_000) as u64;
+        let sys = ctx.accounts.system_program.to_account_info();
+        let buyer = ctx.accounts.buyer.to_account_info();
+        pay(&sys, &buyer, ctx.accounts.seller.to_account_info(), l.price - fee)?;
+        pay(&sys, &buyer, ctx.accounts.fee_receiver.to_account_info(), fee)?;
+        let price = l.price;
+        let s = &mut ctx.accounts.scribe;
+        let from = s.owner;
+        s.owner = ctx.accounts.buyer.key();
+        emit!(Sold { scribe: s.key(), from, to: s.owner, price, fee });
+        Ok(())
+    }
 }
+
+fn pay<'a>(sys: &AccountInfo<'a>, from: &AccountInfo<'a>, to: AccountInfo<'a>, amount: u64) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    system_program::transfer(CpiContext::new(sys.clone(), Transfer { from: from.clone(), to }), amount)
+}
+
+/// Highest sale fee the admin can set: 10%.
+pub const MAX_FEE_BPS: u16 = 1_000;
 
 /// Creates the model's record if this is the first scribe to use the model. Returns true if so.
 fn claim_model(ctx: &Context<Birth>, args: &BirthArgs, scribe: Pubkey, number: u64) -> Result<bool> {
@@ -303,6 +366,98 @@ pub struct Give<'info> {
     pub scribe: Account<'info, Scribe>,
 }
 
+#[account]
+#[derive(InitSpace)]
+pub struct Market {
+    pub fee_bps: u16,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct Listing {
+    pub scribe: Pubkey,
+    pub seller: Pubkey,
+    pub price: u64,
+    pub bump: u8,
+}
+
+#[derive(Accounts)]
+pub struct SetMarket<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump, has_one = admin @ ScribeError::NotAdmin)]
+    pub config: Account<'info, Config>,
+    #[account(init_if_needed, payer = admin, space = 8 + Market::INIT_SPACE, seeds = [b"market"], bump)]
+    pub market: Account<'info, Market>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct List<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(has_one = owner @ ScribeError::NotOwner, seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    pub scribe: Account<'info, Scribe>,
+    #[account(init_if_needed, payer = owner, space = 8 + Listing::INIT_SPACE, seeds = [b"listing", scribe.key().as_ref()], bump)]
+    pub listing: Account<'info, Listing>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Cancel<'info> {
+    pub signer: Signer<'info>,
+    #[account(seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    pub scribe: Account<'info, Scribe>,
+    #[account(mut, close = seller, has_one = seller, seeds = [b"listing", scribe.key().as_ref()], bump = listing.bump)]
+    pub listing: Account<'info, Listing>,
+    /// CHECK: the listing's seller, who gets its rent back (checked by has_one).
+    #[account(mut)]
+    pub seller: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct Buy<'info> {
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(seeds = [b"market"], bump = market.bump)]
+    pub market: Account<'info, Market>,
+    #[account(mut, seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    pub scribe: Account<'info, Scribe>,
+    #[account(mut, close = seller, has_one = seller, seeds = [b"listing", scribe.key().as_ref()], bump = listing.bump)]
+    pub listing: Account<'info, Listing>,
+    /// CHECK: the listing's seller, paid the price (checked by has_one).
+    #[account(mut)]
+    pub seller: UncheckedAccount<'info>,
+    /// CHECK: must be the configured fee receiver.
+    #[account(mut, address = config.fee_receiver @ ScribeError::WrongFeeReceiver)]
+    pub fee_receiver: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event]
+pub struct Listed {
+    pub scribe: Pubkey,
+    pub seller: Pubkey,
+    pub price: u64,
+}
+
+#[event]
+pub struct Unlisted {
+    pub scribe: Pubkey,
+}
+
+#[event]
+pub struct Sold {
+    pub scribe: Pubkey,
+    pub from: Pubkey,
+    pub to: Pubkey,
+    pub price: u64,
+    pub fee: u64,
+}
+
 #[event]
 pub struct Born {
     pub scribe: Pubkey,
@@ -350,6 +505,14 @@ pub enum ScribeError {
     WrongVerifier,
     #[msg("Wrong token mint")]
     WrongMint,
-    #[msg("New owner cannot be the default key")]
+    #[msg("New owner cannot be the default key or the seller")]
     BadOwner,
+    #[msg("The sale fee can be at most 10%")]
+    FeeTooHigh,
+    #[msg("The price must be above zero")]
+    BadPrice,
+    #[msg("The seller no longer owns this scribe")]
+    StaleListing,
+    #[msg("The price is higher than you agreed to pay")]
+    PriceChanged,
 }

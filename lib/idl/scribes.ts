@@ -118,6 +118,213 @@ export type Scribes = {
       ]
     },
     {
+      "name": "buy",
+      "docs": [
+        "Buys a listed scribe: the price goes to the seller minus the sale fee, and the scribe is the",
+        "buyer's. `max_price` protects the buyer from a price raised just before their transaction lands."
+      ],
+      "discriminator": [
+        102,
+        6,
+        61,
+        18,
+        1,
+        218,
+        235,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "scribe",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  114,
+                  105,
+                  98,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe.manifest_sha",
+                "account": "scribe"
+              }
+            ]
+          }
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller",
+          "writable": true,
+          "relations": [
+            "listing"
+          ]
+        },
+        {
+          "name": "feeReceiver",
+          "writable": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "maxPrice",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "cancel",
+      "docs": [
+        "Takes a listing down. The owner can always do it; anyone can clear a listing whose seller no",
+        "longer owns the scribe (it was given away). The listing's rent goes back to the seller."
+      ],
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "scribe",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  114,
+                  105,
+                  98,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe.manifest_sha",
+                "account": "scribe"
+              }
+            ]
+          }
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller",
+          "writable": true,
+          "relations": [
+            "listing"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "give",
       "docs": [
         "Gives a scribe to someone else."
@@ -232,6 +439,163 @@ export type Scribes = {
               "name": "settings"
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "list",
+      "docs": [
+        "Lists a scribe for sale at a price in lamports (listing again changes the price).",
+        "Nothing moves: the scribe stays with its owner until someone buys it."
+      ],
+      "discriminator": [
+        54,
+        174,
+        193,
+        67,
+        17,
+        41,
+        132,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "scribe"
+          ]
+        },
+        {
+          "name": "scribe",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  114,
+                  105,
+                  98,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe.manifest_sha",
+                "account": "scribe"
+              }
+            ]
+          }
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "setMarket",
+      "docs": [
+        "Sets the marketplace sale fee (basis points of the price, paid to the fee receiver). Admin only."
+      ],
+      "discriminator": [
+        24,
+        133,
+        119,
+        187,
+        28,
+        115,
+        163,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "feeBps",
+          "type": "u16"
         }
       ]
     },
@@ -389,6 +753,32 @@ export type Scribes = {
       ]
     },
     {
+      "name": "listing",
+      "discriminator": [
+        218,
+        32,
+        50,
+        73,
+        43,
+        134,
+        26,
+        58
+      ]
+    },
+    {
+      "name": "market",
+      "discriminator": [
+        219,
+        190,
+        213,
+        55,
+        0,
+        227,
+        198,
+        154
+      ]
+    },
+    {
       "name": "scribe",
       "discriminator": [
         180,
@@ -427,6 +817,45 @@ export type Scribes = {
         222,
         37,
         159
+      ]
+    },
+    {
+      "name": "listed",
+      "discriminator": [
+        243,
+        173,
+        136,
+        195,
+        125,
+        241,
+        12,
+        99
+      ]
+    },
+    {
+      "name": "sold",
+      "discriminator": [
+        205,
+        203,
+        210,
+        202,
+        96,
+        11,
+        192,
+        10
+      ]
+    },
+    {
+      "name": "unlisted",
+      "discriminator": [
+        200,
+        255,
+        248,
+        52,
+        219,
+        183,
+        40,
+        213
       ]
     },
     {
@@ -507,7 +936,27 @@ export type Scribes = {
     {
       "code": 6012,
       "name": "badOwner",
-      "msg": "New owner cannot be the default key"
+      "msg": "New owner cannot be the default key or the seller"
+    },
+    {
+      "code": 6013,
+      "name": "feeTooHigh",
+      "msg": "The sale fee can be at most 10%"
+    },
+    {
+      "code": 6014,
+      "name": "badPrice",
+      "msg": "The price must be above zero"
+    },
+    {
+      "code": 6015,
+      "name": "staleListing",
+      "msg": "The seller no longer owns this scribe"
+    },
+    {
+      "code": 6016,
+      "name": "priceChanged",
+      "msg": "The price is higher than you agreed to pay"
     }
   ],
   "types": [
@@ -629,6 +1078,66 @@ export type Scribes = {
       }
     },
     {
+      "name": "listed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "scribe",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "listing",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "scribe",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "market",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "feeBps",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "scribe",
       "type": {
         "kind": "struct",
@@ -721,6 +1230,46 @@ export type Scribes = {
           {
             "name": "burnAmount",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sold",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "scribe",
+            "type": "pubkey"
+          },
+          {
+            "name": "from",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unlisted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "scribe",
+            "type": "pubkey"
           }
         ]
       }

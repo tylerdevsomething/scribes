@@ -200,9 +200,77 @@ async function main() {
     assert.equal(s.verified, true);
   });
 
-  await check('the program has no instruction that closes anything', async () => {
+  // ---- the market ----
+  const marketPda = pda(Buffer.from('market'));
+  const listingPda = (scribe: PublicKey) => pda(Buffer.from('listing'), scribe.toBuffer());
+  const list = (owner: Keypair, scribe: PublicKey, lamports: number) => program.methods.list(new BN(lamports))
+    .accountsPartial({ owner: owner.publicKey, scribe, listing: listingPda(scribe) }).signers([owner]).rpc();
+  const buy = async (buyer: Keypair, scribe: PublicKey, max: number) => {
+    const l = await program.account.listing.fetch(listingPda(scribe));
+    return program.methods.buy(new BN(max)).accountsPartial({
+      buyer: buyer.publicKey, config: configPda, market: marketPda, scribe, listing: listingPda(scribe), seller: l.seller, feeReceiver,
+    }).signers([buyer]).rpc();
+  };
+  const cancel = (signer: Keypair, scribe: PublicKey, seller: PublicKey) => program.methods.cancel()
+    .accountsPartial({ signer: signer.publicKey, scribe, listing: listingPda(scribe), seller }).signers([signer]).rpc();
+
+  await refuses('market fee set by someone other than the admin', () =>
+    program.methods.setMarket(250).accountsPartial({ admin: stranger.publicKey, config: configPda, market: marketPda }).signers([stranger]).rpc(),
+  /NotAdmin/);
+  await refuses('a market fee above 10%', () =>
+    program.methods.setMarket(1001).accountsPartial({ admin: admin.publicKey, config: configPda, market: marketPda }).rpc(),
+  /FeeTooHigh/);
+  await check('admin sets a 2.5% sale fee', async () => {
+    await program.methods.setMarket(250).accountsPartial({ admin: admin.publicKey, config: configPda, market: marketPda }).rpc();
+    assert.equal((await program.account.market.fetch(marketPda)).feeBps, 250);
+  });
+
+  // bob owns s1 now (given above).
+  await refuses('listing a scribe you do not own', () => list(alice, s1, LAMPORTS_PER_SOL), /NotOwner/);
+  await refuses('listing for nothing', () => list(bob, s1, 0), /BadPrice/);
+  await check('list, then list again to change the price', async () => {
+    await list(bob, s1, LAMPORTS_PER_SOL);
+    await list(bob, s1, LAMPORTS_PER_SOL / 2);
+    assert.equal((await program.account.listing.fetch(listingPda(s1))).price.toNumber(), LAMPORTS_PER_SOL / 2);
+    assert.ok((await program.account.scribe.fetch(s1)).owner.equals(bob.publicKey), 'listing moves nothing');
+  });
+  await refuses("cancelling someone else's live listing", () => cancel(stranger, s1, bob.publicKey), /NotOwner/);
+  const carol = await funded();
+  await refuses('buying above the price you agreed to (price raised)', async () => {
+    await list(bob, s1, LAMPORTS_PER_SOL); // raised just before the buy lands
+    return buy(carol, s1, LAMPORTS_PER_SOL / 2);
+  }, /PriceChanged/);
+  await refuses('buying your own listing', () => buy(bob, s1, LAMPORTS_PER_SOL), /BadOwner/);
+  await check('buy: seller paid minus 2.5%, fee to the receiver, scribe moves, listing closed, badge stays', async () => {
+    const [sellerBefore, feeBefore] = [await conn.getBalance(bob.publicKey), await conn.getBalance(feeReceiver)];
+    const rent = (await conn.getAccountInfo(listingPda(s1)))!.lamports;
+    await buy(carol, s1, LAMPORTS_PER_SOL);
+    assert.equal((await conn.getBalance(bob.publicKey)) - sellerBefore, LAMPORTS_PER_SOL * 0.975 + rent);
+    assert.equal((await conn.getBalance(feeReceiver)) - feeBefore, LAMPORTS_PER_SOL * 0.025);
+    const s = await program.account.scribe.fetch(s1);
+    assert.ok(s.owner.equals(carol.publicKey));
+    assert.equal(s.verified, true);
+    assert.equal(await conn.getAccountInfo(listingPda(s1)), null);
+  });
+  await check('a listing left behind after a gift cannot be bought, and anyone can clear it', async () => {
+    const dave = Keypair.generate().publicKey;
+    await list(carol, s1, LAMPORTS_PER_SOL);
+    await program.methods.give(dave).accountsPartial({ owner: carol.publicKey, scribe: s1 }).signers([carol]).rpc();
+    await assert.rejects(buy(alice, s1, LAMPORTS_PER_SOL), /StaleListing/);
+    const before = await conn.getBalance(carol.publicKey);
+    await cancel(stranger, s1, carol.publicKey);
+    assert.equal(await conn.getAccountInfo(listingPda(s1)), null);
+    assert.ok((await conn.getBalance(carol.publicKey)) > before, 'the rent goes back to the seller');
+    assert.ok((await program.account.scribe.fetch(s1)).owner.equals(dave));
+  });
+
+  await check('no instruction closes a scribe (only listings close)', async () => {
     const names = idl.instructions.map((i: { name: string }) => i.name).sort();
-    assert.deepEqual(names, ['birth', 'give', 'initialize', 'set_settings', 'verify']);
+    assert.deepEqual(names, ['birth', 'buy', 'cancel', 'give', 'initialize', 'list', 'set_market', 'set_settings', 'verify']);
+    for (const i of idl.instructions as { name: string; accounts: { name: string }[] }[]) {
+      if (i.name === 'buy' || i.name === 'cancel') continue;
+      assert.ok(!JSON.stringify(i).includes('"close"'), `${i.name} must not close anything`);
+    }
   });
 
   console.log(`\nall ${passed} checks passed`);
