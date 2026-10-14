@@ -116,6 +116,41 @@ async function open() {
   }
 }
 
+// Small models fall into loops easily: penalise repeats, and keep the prompt to recent turns.
+const SAMPLING = {
+  max_tokens: 200, temperature: 0.7, top_p: 0.9, top_k: 40, min_p: 0.05,
+  penalty_last_n: 256, penalty_repeat: 1.18, penalty_freq: 0.3, penalty_present: 0.3,
+};
+const RECENT_TURNS = 8;
+
+function sentences(text: string): string[] {
+  return text.split(/(?<=[.!?])\s+/).map((s) => s.trim().toLowerCase()).filter((s) => s.length > 8);
+}
+
+// Looping: the same sentence three times.
+function looping(text: string): boolean {
+  const seen = new Map<string, number>();
+  for (const s of sentences(text)) {
+    const n = (seen.get(s) ?? 0) + 1;
+    if (n >= 3) return true;
+    seen.set(s, n);
+  }
+  return false;
+}
+
+function trimLoop(text: string): string {
+  const parts = text.split(/(?<=[.!?])\s+/);
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  for (const p of parts) {
+    const k = p.trim().toLowerCase();
+    if (k.length > 8 && seen.has(k)) break;
+    seen.add(k);
+    kept.push(p);
+  }
+  return kept.join(' ').trim();
+}
+
 function addMsg(cls: string, text: string) {
   const d = document.createElement('div');
   d.className = 'msg ' + cls;
@@ -137,14 +172,25 @@ async function send() {
   const t0 = performance.now();
   let reply = '', pieces = 0;
   try {
+    const abort = new AbortController();
     const stream = await wllama.createChatCompletion({
-      messages: [{ role: 'system', content: systemPrompt(personality) }, ...history],
-      stream: true, max_tokens: 200, temperature: 0.7, top_p: 0.9,
+      messages: [{ role: 'system', content: systemPrompt(personality) }, ...history.slice(-RECENT_TURNS)],
+      stream: true, abortSignal: abort.signal, ...SAMPLING,
     });
-    for await (const c of stream) {
-      const t = c.choices[0]?.delta?.content;
-      if (t) { reply += t; pieces++; out.textContent = reply; $('log').scrollTop = $('log').scrollHeight; }
+    try {
+      for await (const c of stream) {
+        const t = c.choices[0]?.delta?.content;
+        if (!t) continue;
+        reply += t; pieces++;
+        out.textContent = reply; $('log').scrollTop = $('log').scrollHeight;
+        if (looping(reply)) { abort.abort(); break; }
+      }
+    } catch (e) {
+      if (!abort.signal.aborted) throw e;
     }
+    // A reply that fell into a loop is cut back to its first pass, so the loop does not feed the next turn.
+    reply = trimLoop(reply);
+    out.textContent = reply;
     history.push({ role: 'assistant', content: reply });
     const secs = (performance.now() - t0) / 1000;
     out.insertAdjacentHTML('beforeend', `<div class="stats">${pieces} tokens · ${(pieces / secs).toFixed(1)} tokens/s</div>`);
