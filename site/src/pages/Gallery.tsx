@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { fileUrl, getScribes, type ScribeView } from '../api.ts';
 import { Sigil } from '../Sigil.tsx';
 import { sol } from '../config.ts';
+import { ActivityList, namesOf, useActivity } from './Activity.tsx';
 
 export function Portrait({ s }: { s: ScribeView }) {
   const pic = s.files.find((f) => f.role === 'picture');
@@ -53,6 +54,7 @@ export function Gallery() {
   const [error, setError] = useState('');
   const [sort, setSort] = useState<'new' | 'birth' | 'rank' | 'sale'>('new');
   const [q, setQ] = useState('');
+  const activity = useActivity(undefined, 8);
   useEffect(() => {
     let live = true;
     const load = () => getScribes().then((l) => { if (live) { setList(l); setError(''); } }).catch((e) => live && setError(e.message));
@@ -139,6 +141,11 @@ export function Gallery() {
       {!list && !error && <div className="grid">{[0, 1, 2, 3].map((i) => <div key={i} className="card skeleton"><div className="art" /><div className="body"><div className="line" /><div className="line short" /></div></div>)}</div>}
       {list && shown.length === 0 && <div className="empty">{q ? `No scribe matches “${q}”.` : sort === 'sale' ? 'Nothing is for sale right now.' : <>No scribes yet. <a href="#/create">Inscribe the first one.</a></>}</div>}
       <div className="grid">{shown.map((s) => <ScribeCard key={s.address} s={s} />)}</div>
+
+      <section className="panel" style={{ marginBottom: 56 }}>
+        <div className="panel-head"><h3>Latest activity</h3><span className="muted">births · verifications · sales · gifts</span></div>
+        <ActivityList rows={activity} names={namesOf(list)} />
+      </section>
     </>
   );
 }

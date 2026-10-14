@@ -12,6 +12,7 @@ import { loadInscribed, type Step } from '../run/inscribed.ts';
 import { describeError, loadBound } from '../run/bound.ts';
 import { MarketPanel } from './Market.tsx';
 import { VerifyPanel } from './Verify.tsx';
+import { ActivityList, useActivity } from './Activity.tsx';
 import { sol } from '../config.ts';
 
 const KEY_STORE = 'scribes.anthropic-key';
@@ -89,6 +90,7 @@ export function ScribePage({ address }: { address: string }) {
           </div>
         )}
 
+        <History s={s} />
         {s.files.length > 0 && (
           <div className="panel filelist">
             <div className="panel-head"><h3>Inscribed files</h3><span className="muted">{s.files.length + 1} with the manifest</span></div>
@@ -101,6 +103,16 @@ export function ScribePage({ address }: { address: string }) {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function History({ s }: { s: ScribeView }) {
+  const rows = useActivity(s.address, 30);
+  return (
+    <div className="panel">
+      <div className="panel-head"><h3>History</h3><span className="muted">on Solana</span></div>
+      <ActivityList rows={rows} names={new Map([[s.address, s.name ?? 'It']])} compact />
     </div>
   );
 }

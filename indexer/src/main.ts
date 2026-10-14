@@ -5,6 +5,7 @@
 // GET /scribes          every scribe with status, attributes and rarity (hidden ones flagged, not removed)
 // GET /scribe/:address  one scribe
 // GET /market           { feeBps } the sale fee
+// GET /activity[?scribe=&limit=]  births, verifications, listings, sales and gifts, newest first
 // GET /settings         chain settings: verifier, burn mint and amount (+ decimals, token program), fees
 // POST /verify/:address the bot's checks; a passing scribe gets a signed pass (needs --verifier)
 // POST /faucet {owner}  test SOL and test tokens (only with --faucet, never on mainnet)
@@ -28,6 +29,7 @@ import { Indexer } from './indexer.ts';
 import { LIMITS, Uploads } from './uploads.ts';
 import { runtimeFiles } from './runtime.ts';
 import { Verifier } from './verifier.ts';
+import { ActivityLog } from './activity.ts';
 import { Faucet } from './faucet.ts';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { getMint } from '@solana/spl-token';
@@ -45,6 +47,7 @@ const cache = arg('cache', '.cache/indexer');
 const port = Number(arg('port', '8790'));
 const every = Number(arg('every', '5')) * 1000;
 const indexer = new Indexer(conn, cache);
+const activity = new ActivityLog(conn, join(cache, 'activity.json'));
 const writerPath = process.argv.includes('--writer') ? arg('writer') : null;
 const uploads = writerPath
   ? new Uploads({
@@ -98,6 +101,7 @@ async function loop() {
     try {
       loadHidden();
       await indexer.sync();
+      await activity.sync();
     } catch (e) {
       console.error('sync failed:', (e as Error).message);
     }
@@ -148,6 +152,7 @@ createServer((req, res) => {
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
   if (parts[0] === 'health') return json(res, 200, { syncedAt: indexer.syncedAt, scribes: indexer.list().length });
   if (parts[0] === 'market') return json(res, 200, { feeBps: indexer.feeBps });
+  if (parts[0] === 'activity') return json(res, 200, activity.list({ scribe: url.searchParams.get('scribe') ?? undefined, limit: Math.min(200, Number(url.searchParams.get('limit') ?? 50)) }));
   if (parts[0] === 'settings') { settings().then((s) => json(res, 200, s), (e) => json(res, 500, { error: e.message })); return; }
   if (parts[0] === 'verify' && parts.length === 2 && req.method === 'POST') {
     if (!verifier) return json(res, 404, { error: 'the verification bot is not running on this server' });

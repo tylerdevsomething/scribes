@@ -263,3 +263,15 @@ nav.main a { white-space: nowrap; }
   table.attrs td:first-child { width: auto; }
   .bubble { max-width: 92%; }
 }
+
+/* ---- activity feed ---- */
+ul.feed { list-style: none; margin: 0; padding: 0; }
+ul.feed li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14.5px; }
+ul.feed li:first-child { border-top: 0; }
+ul.feed i { font-style: normal; width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: var(--stone-soft); color: var(--ink-2); }
+ul.feed li.born i { background: #f8ecd2; color: #7a5410; }
+ul.feed li.verified i { background: var(--teal-soft); color: var(--teal); }
+ul.feed li.sold i { background: var(--tan-soft); color: var(--tan); }
+ul.feed .what { flex: 1; min-width: 0; }
+ul.feed .what a { color: var(--ink); }
+ul.feed .when { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
