@@ -13,7 +13,7 @@ const ALLOWED = [
 ];
 
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' })
-  .split('\n').filter(Boolean).filter((f) => f !== 'package-lock.json');
+  .split('\n').filter(Boolean).filter((f) => f !== 'package-lock.json' && f !== 'Cargo.lock'); // lockfiles: third-party package names
 
 let hits = 0;
 for (const f of files) {
