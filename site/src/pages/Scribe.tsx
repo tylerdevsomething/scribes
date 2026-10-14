@@ -10,6 +10,8 @@ import { Badges, Capsule, Portrait, brainLine } from './Gallery.tsx';
 import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
 import { describeError, loadBound } from '../run/bound.ts';
+import { MarketPanel } from './Market.tsx';
+import { sol } from '../config.ts';
 
 const KEY_STORE = 'scribes.anthropic-key';
 // Where each attribute comes from (the brief's colour code).
@@ -18,13 +20,14 @@ const FROM_CHAIN: Attribute[] = ['Birth', 'Autograph', 'Verified'];
 export function ScribePage({ address }: { address: string }) {
   const [s, setS] = useState<ScribeView | null>(null);
   const [error, setError] = useState('');
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
     const load = () => getScribe(address).then((x) => { if (live) { setS(x); setError(''); } }).catch((e) => live && setError(e.message));
     load();
     const t = setInterval(load, 5000);
     return () => { live = false; clearInterval(t); };
-  }, [address]);
+  }, [address, tick]);
 
   if (error && !s) return <div className="prose"><div className="notice bad">{error}</div></div>;
   if (!s) return <div className="prose muted">Loading…</div>;
@@ -43,6 +46,7 @@ export function ScribePage({ address }: { address: string }) {
           <div><span>On-chain record</span><a href={explorer('address', s.address)} target="_blank" rel="noreferrer"><code>{short(s.address)}</code></a></div>
           <div><span>Born at slot</span><span>{s.birthSlot.toLocaleString()}</span></div>
           {s.rarity && <div><span>Rarity rank</span><span>{s.rarity.rank}</span></div>}
+          {s.listing && <div><span>For sale</span><span>{sol(s.listing.price)} SOL</span></div>}
         </div>
         <details style={{ marginTop: 14 }}>
           <summary className="muted" style={{ cursor: 'pointer', fontSize: 13.5 }}>Scribe link</summary>
@@ -60,6 +64,7 @@ export function ScribePage({ address }: { address: string }) {
         )}
         {s.status.state === 'invalid' && <div className="notice bad" style={{ marginBottom: 18 }}>This scribe broke a rule and cannot run: {s.status.reason}</div>}
         {s.status.state === 'complete' && <Wake s={s} />}
+        <MarketPanel s={s} onChange={() => setTick((n) => n + 1)} />
 
         {s.rarity && (
           <div className="panel">

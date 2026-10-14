@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Transaction } from '@solana/web3.js';
 import { checkUpload, checkout, newUpload, putPart, submitted, uploadStatus, type CheckReport, type UploadPhase } from '../api.ts';
 import { conn, explorer, sol } from '../config.ts';
-import { connect, signTransaction, wallets } from '../wallet.ts';
+import { connect, signTransaction, useWallet, wallets } from '../wallet.ts';
 
 type Part = 'personality' | 'model' | 'brain' | 'picture';
 
@@ -25,7 +25,7 @@ export function Create() {
   const [id, setId] = useState<string | null>(null);
   const [report, setReport] = useState<CheckReport | null>(null);
   const [phase, setPhase] = useState<UploadPhase | null>(null);
-  const [owner, setOwner] = useState<string | null>(null);
+  const owner = useWallet();
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const pickRef = useRef<HTMLInputElement>(null);
@@ -64,7 +64,7 @@ export function Create() {
   }
 
   async function connectWallet(provider: Parameters<typeof connect>[0]) {
-    try { setOwner((await connect(provider)).toBase58()); } catch (e) { setError((e as Error).message); }
+    try { await connect(provider); } catch (e) { setError((e as Error).message); }
   }
 
   async function inscribe() {

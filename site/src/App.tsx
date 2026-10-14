@@ -5,6 +5,7 @@ import { Create } from './pages/Create.tsx';
 import { BriefPage } from './pages/Brief.tsx';
 import { CLUSTER } from './config.ts';
 import { Mark } from './Sigil.tsx';
+import { WalletButton } from './WalletButton.tsx';
 
 function useHash(): string {
   const [h, setH] = useState(location.hash.slice(1) || '/');
@@ -36,6 +37,7 @@ export function App() {
             <a className={on('brief')} href="#/brief">Brief</a>
           </nav>
           {CLUSTER !== 'mainnet' && <span className="net">{CLUSTER}</span>}
+          <WalletButton />
         </div>
       </header>
       <main className="wrap">{page}</main>

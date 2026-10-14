@@ -4,6 +4,7 @@
 // GET /health           { syncedAt, scribes }
 // GET /scribes          every scribe with status, attributes and rarity (hidden ones flagged, not removed)
 // GET /scribe/:address  one scribe
+// GET /market           { feeBps } the sale fee
 // GET /files/:sha256    a checked file of a valid, complete, not-hidden scribe
 //
 // Create flow (needs --writer, the server's writer key):
@@ -124,6 +125,7 @@ createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
   if (parts[0] === 'health') return json(res, 200, { syncedAt: indexer.syncedAt, scribes: indexer.list().length });
+  if (parts[0] === 'market') return json(res, 200, { feeBps: indexer.feeBps });
   if (parts[0] === 'scribes' && parts.length === 1) return json(res, 200, indexer.list());
   if (parts[0] === 'scribe' && parts.length === 2) {
     const s = indexer.get(parts[1]);

@@ -11,5 +11,6 @@ export function explorer(kind: 'address' | 'tx', id: string): string {
   return `https://explorer.solana.com/${kind}/${id}${c}`;
 }
 
-export const sol = (lamports: number) => (lamports / 1e9).toFixed(lamports < 1e7 ? 6 : 4);
+// SOL amounts without trailing zeros: 2 → "2", 0.0020842 → "0.002084".
+export const sol = (lamports: number) => String(parseFloat((lamports / 1e9).toFixed(lamports < 1e7 ? 6 : 4)));
 export const short = (s: string) => `${s.slice(0, 4)}…${s.slice(-4)}`;

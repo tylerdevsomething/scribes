@@ -1,5 +1,8 @@
-// Browser wallets (Phantom, Solflare, Backpack) through their injected providers.
-import { PublicKey, Transaction } from '@solana/web3.js';
+// Browser wallets (Phantom, Solflare, Backpack) through their injected providers, with a tiny shared
+// store so every page knows who is connected.
+import { useEffect, useState } from 'react';
+import { PublicKey, Transaction, type TransactionInstruction } from '@solana/web3.js';
+import { conn } from './config.ts';
 
 interface Injected {
   publicKey?: { toBase58(): string } | null;
@@ -20,16 +23,45 @@ export function wallets(): { name: string; provider: Injected }[] {
 }
 
 let current: Injected | null = null;
+let address: string | null = null;
+const listeners = new Set<(a: string | null) => void>();
 
 export async function connect(provider: Injected): Promise<PublicKey> {
   const r = await provider.connect();
   const key = (r && 'publicKey' in r ? r.publicKey : provider.publicKey);
   if (!key) throw new Error('the wallet did not share an address');
   current = provider;
-  return new PublicKey(key.toBase58());
+  address = key.toBase58();
+  listeners.forEach((f) => f(address));
+  return new PublicKey(address);
+}
+
+export async function disconnect() {
+  await current?.disconnect?.().catch(() => {});
+  current = null;
+  address = null;
+  listeners.forEach((f) => f(null));
+}
+
+export function useWallet(): string | null {
+  const [a, setA] = useState(address);
+  useEffect(() => { listeners.add(setA); return () => { listeners.delete(setA); }; }, []);
+  return a;
 }
 
 export async function signTransaction(tx: Transaction): Promise<Transaction> {
   if (!current) throw new Error('connect a wallet first');
   return current.signTransaction(tx);
+}
+
+// Builds, signs (wallet) and sends instructions; resolves once confirmed.
+export async function sendInstructions(ixs: TransactionInstruction[]): Promise<string> {
+  if (!current || !address) throw new Error('connect a wallet first');
+  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
+  const tx = new Transaction({ feePayer: new PublicKey(address), blockhash, lastValidBlockHeight }).add(...ixs);
+  const signed = await current.signTransaction(tx);
+  const sig = await conn.sendRawTransaction(signed.serialize());
+  const r = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+  if (r.value.err) throw new Error(`the transaction failed: ${JSON.stringify(r.value.err)}`);
+  return sig;
 }

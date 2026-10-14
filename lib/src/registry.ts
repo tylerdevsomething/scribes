@@ -15,6 +15,12 @@ export function configAddress(): PublicKey {
 export function scribeAddress(manifestSha: string): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from('scribe'), fromHex(manifestSha)], SCRIBES_PROGRAM)[0];
 }
+export function marketAddress(): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from('market')], SCRIBES_PROGRAM)[0];
+}
+export function listingAddress(scribe: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from('listing'), scribe.toBuffer()], SCRIBES_PROGRAM)[0];
+}
 export function modelAddress(modelSha: string): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from('model'), fromHex(modelSha)], SCRIBES_PROGRAM)[0];
 }
@@ -78,4 +84,43 @@ export function settingsArg(s: SettingsInput) {
     admin: s.admin, verifier: s.verifier, feeReceiver: s.feeReceiver, birthFee: new BN(s.birthFee),
     burnMint: s.burnMint, burnAmount: new BN(s.burnAmount.toString()),
   };
+}
+
+// ---- the market ----
+
+export interface ListingRecord { scribe: string; seller: string; price: number }
+
+export async function allListings(program: Program<Scribes>): Promise<ListingRecord[]> {
+  const list = await program.account.listing.all();
+  return list.map(({ account: a }) => ({ scribe: a.scribe.toBase58(), seller: a.seller.toBase58(), price: a.price.toNumber() }));
+}
+
+export async function marketFeeBps(program: Program<Scribes>): Promise<number | null> {
+  const m = await program.account.market.fetchNullable(marketAddress());
+  return m ? m.feeBps : null;
+}
+
+function scribeKey(s: PublicKey | string): PublicKey { return typeof s === 'string' ? new PublicKey(s) : s; }
+
+export function listInstruction(program: Program<Scribes>, owner: PublicKey, scribe: PublicKey | string, lamports: number) {
+  const s = scribeKey(scribe);
+  return program.methods.list(new BN(lamports)).accountsPartial({ owner, scribe: s, listing: listingAddress(s) }).instruction();
+}
+
+export function cancelInstruction(program: Program<Scribes>, signer: PublicKey, scribe: PublicKey | string, seller: PublicKey | string) {
+  const s = scribeKey(scribe);
+  return program.methods.cancel().accountsPartial({ signer, scribe: s, listing: listingAddress(s), seller: scribeKey(seller) }).instruction();
+}
+
+export async function buyInstruction(program: Program<Scribes>, buyer: PublicKey, scribe: PublicKey | string, seller: PublicKey | string, maxPrice: number) {
+  const s = scribeKey(scribe);
+  const config = await program.account.config.fetch(configAddress());
+  return program.methods.buy(new BN(maxPrice)).accountsPartial({
+    buyer, config: configAddress(), market: marketAddress(), scribe: s, listing: listingAddress(s),
+    seller: scribeKey(seller), feeReceiver: config.feeReceiver,
+  }).instruction();
+}
+
+export function giveInstruction(program: Program<Scribes>, owner: PublicKey, scribe: PublicKey | string, to: PublicKey) {
+  return program.methods.give(to).accountsPartial({ owner, scribe: scribeKey(scribe) }).instruction();
 }

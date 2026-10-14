@@ -9,7 +9,7 @@ import { decodeManifest, formatLink, type Manifest } from '../../lib/src/manifes
 import { parsePersonality, wordCount, type Personality } from '../../lib/src/personality.ts';
 import { readGguf, type GgufInfo } from '../../lib/src/gguf.ts';
 import { rankAll, type Ranked, type ScribeFacts } from '../../lib/src/rarity.ts';
-import { allScribes, scribesProgram, ZERO_SHA, type ScribeRecord } from '../../lib/src/registry.ts';
+import { allListings, allScribes, marketFeeBps, scribesProgram, ZERO_SHA, type ListingRecord, type ScribeRecord } from '../../lib/src/registry.ts';
 
 export type Status =
   | { state: 'inscribing'; done: number; total: number } // chunks found so far, over all files
@@ -26,6 +26,7 @@ export interface ScribeView extends ScribeRecord {
   files: Manifest['files'];
   rarity: Ranked | null;
   hidden: boolean;
+  listing: { price: number; seller: string } | null; // only a live listing (its seller still owns the scribe)
 }
 
 interface Entry {
@@ -43,6 +44,8 @@ export class Indexer {
   private collectors = new Map<string, FileCollector>(); // shared: the same file under many scribes is read once
   private ranks = new Map<string, Ranked>();
   private hidden = new Set<string>();
+  private listings = new Map<string, ListingRecord>();
+  feeBps: number | null = null;
   private conn: Connection;
   private cacheDir: string;
   syncedAt = 0;
@@ -78,7 +81,10 @@ export class Indexer {
 
   // One pass: new scribes, progress on unfinished ones, then ranks.
   async sync(): Promise<void> {
-    const records = await allScribes(scribesProgram(this.conn));
+    const program = scribesProgram(this.conn);
+    const records = await allScribes(program);
+    this.listings = new Map((await allListings(program)).map((l) => [l.scribe, l]));
+    this.feeBps = await marketFeeBps(program);
     for (const r of records) {
       const e = this.entries.get(r.address);
       if (e) { e.record = r; continue; } // owner and verified can change
@@ -171,7 +177,13 @@ export class Indexer {
       files: e.decoded?.files ?? [],
       rarity: this.ranks.get(r.address) ?? null,
       hidden: this.hidden.has(r.address),
+      listing: this.liveListing(r),
     };
+  }
+
+  private liveListing(r: ScribeRecord): ScribeView['listing'] {
+    const l = this.listings.get(r.address);
+    return l && l.seller === r.owner ? { price: l.price, seller: l.seller } : null;
   }
 
   list(): ScribeView[] {

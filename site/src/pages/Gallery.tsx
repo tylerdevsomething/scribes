@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fileUrl, getScribes, type ScribeView } from '../api.ts';
 import { Sigil } from '../Sigil.tsx';
+import { sol } from '../config.ts';
 
 export function Portrait({ s }: { s: ScribeView }) {
   const pic = s.files.find((f) => f.role === 'picture');
@@ -33,7 +34,7 @@ export function Capsule({ n }: { n: number }) {
 export function Gallery() {
   const [list, setList] = useState<ScribeView[] | null>(null);
   const [error, setError] = useState('');
-  const [sort, setSort] = useState<'new' | 'birth' | 'rank'>('new');
+  const [sort, setSort] = useState<'new' | 'birth' | 'rank' | 'sale'>('new');
   useEffect(() => {
     let live = true;
     const load = () => getScribes().then((l) => { if (live) { setList(l); setError(''); } }).catch((e) => live && setError(e.message));
@@ -43,6 +44,7 @@ export function Gallery() {
   }, []);
   const visible = useMemo(() => (list ?? []).filter((s) => !s.hidden && s.status.state !== 'invalid'), [list]);
   const shown = useMemo(() => {
+    if (sort === 'sale') return visible.filter((s) => s.listing).sort((a, b) => a.listing!.price - b.listing!.price);
     if (sort === 'rank') return [...visible].sort((a, b) => (a.rarity?.rank ?? 1e9) - (b.rarity?.rank ?? 1e9));
     if (sort === 'new') return [...visible].reverse();
     return visible;
@@ -88,16 +90,18 @@ export function Gallery() {
           <button className={sort === 'new' ? 'on' : ''} onClick={() => setSort('new')}>Newest</button>
           <button className={sort === 'birth' ? 'on' : ''} onClick={() => setSort('birth')}>First born</button>
           <button className={sort === 'rank' ? 'on' : ''} onClick={() => setSort('rank')}>Rarest</button>
+          <button className={sort === 'sale' ? 'on' : ''} onClick={() => setSort('sale')}>For sale</button>
         </div>
       </div>
       {error && <div className="notice bad" style={{ marginBottom: 16 }}>Could not reach the indexer: {error}</div>}
-      {list && shown.length === 0 && <div className="empty">No scribes yet. <a href="#/create">Inscribe the first one.</a></div>}
+      {list && shown.length === 0 && <div className="empty">{sort === 'sale' ? 'Nothing is for sale right now.' : <>No scribes yet. <a href="#/create">Inscribe the first one.</a></>}</div>}
       <div className="grid">
         {shown.map((s) => (
           <a key={s.address} className="card" href={`#/scribe/${s.address}`}>
             <div className="art">
               <Portrait s={s} />
               <span className="corner"><Capsule n={s.birthNumber + 1} /></span>
+              {s.listing && <span className="tag-price">{sol(s.listing.price)} SOL</span>}
             </div>
             <div className="body">
               <div className="name">{s.name ?? 'Inscribing…'}</div>

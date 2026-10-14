@@ -6,6 +6,7 @@
 //                              (--model <file.gguf> | --bound <provider>:<model>) [--rps 10] [--price 0]
 //   node tools/cli.ts rebuild  --link <scribes:v1:...> --rpc <url> [--out .cache/files]
 //   node tools/cli.ts init     --key <upgrade authority.json> --rpc <url> [--verifier <pk>] [--fee-receiver <pk>] [--fee <lamports>]
+//   node tools/cli.ts market   --key <admin.json> --rpc <url> --fee-bps 250
 //   (inscribe registers the scribe with the program at the end; --no-birth skips that)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -17,7 +18,7 @@ import { readGguf } from '../lib/src/gguf.ts';
 import { decodeManifest, encodeManifest, formatLink, parseLink, type Brain, type FileRef, type Manifest, type Role } from '../lib/src/manifest.ts';
 import { parsePersonality } from '../lib/src/personality.ts';
 import { runtimeFiles } from '../indexer/src/runtime.ts';
-import { ZERO_SHA, birthInstruction, configAddress, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
+import { ZERO_SHA, birthInstruction, configAddress, marketAddress, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
 
 function args(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -166,6 +167,14 @@ async function main() {
       .accountsPartial({ payer: key.publicKey, config: configAddress(), program: program.programId, programData }).instruction();
     const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
     console.log(`settings created: ${configAddress().toBase58()} · ${sig}`);
+  } else if (cmd === 'market') {
+    const conn = new Connection(need(a, 'rpc'), 'confirmed');
+    const key = loadKey(need(a, 'key'));
+    const program = scribesProgram(conn);
+    const bps = Number(need(a, 'fee-bps'));
+    const ix = await program.methods.setMarket(bps).accountsPartial({ admin: key.publicKey, config: configAddress(), market: marketAddress() }).instruction();
+    const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
+    console.log(`sale fee set to ${bps / 100}% · ${sig}`);
   } else if (cmd === 'rebuild') {
     const conn = new Connection(need(a, 'rpc'), 'confirmed');
     const link = parseLink(need(a, 'link'));

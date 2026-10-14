@@ -216,3 +216,15 @@ footer.site { border-top: 1px solid var(--line); padding: 28px 0 48px; color: va
 footer.site .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
 main.wrap { min-height: calc(100vh - 64px - 96px); }
+
+/* ---- wallet & market ---- */
+.menu-wrap { position: relative; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 170px; z-index: 20; }
+.menu button { border: 0; border-radius: 8px; justify-content: flex-start; }
+.menu button:hover { background: var(--sheet-2); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal-2); display: inline-block; }
+.price { display: flex; align-items: baseline; gap: 8px; margin: 0 0 14px; }
+.price .amount { font: 600 40px/1 var(--serif); }
+.price .unit { font: 600 14px var(--mono); color: var(--muted); }
+.tag-price { position: absolute; top: 10px; right: 10px; background: var(--tan); color: #fff; font: 600 12px/1 var(--mono); padding: 6px 9px; border-radius: 999px; }
+@media (max-width: 640px) { .seg button { padding: 7px 10px; font-size: 12.5px; } }
