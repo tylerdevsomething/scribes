@@ -1,0 +1,16 @@
+[toolchain]
+anchor_version = "0.31.1"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+scribes = "E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq"
+
+[programs.devnet]
+scribes = "E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq"
+
+[provider]
+cluster = "localnet"
+wallet = "/mnt/c/Users/Admin/scribes-keys/writer-dev.json"

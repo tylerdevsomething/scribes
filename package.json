@@ -13,6 +13,8 @@
     "cli": "node tools/cli.ts"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/spl-token": "^0.4.13",
     "@solana/web3.js": "^1.98.4",
     "@wllama/wllama": "^3.8.1"
   },

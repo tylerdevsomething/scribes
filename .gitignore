@@ -3,3 +3,6 @@ dist/
 .cache/
 *.keypair.json
 .env*
+target/
+.anchor/
+test-ledger/

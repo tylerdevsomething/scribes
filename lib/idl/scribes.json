@@ -1,0 +1,744 @@
+{
+  "address": "E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq",
+  "metadata": {
+    "name": "scribes",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "birth",
+      "docs": [
+        "Registers a scribe. Signed by its owner (who pays) and by the writer of its manifest, so nobody",
+        "can see a manifest on chain and claim it first."
+      ],
+      "discriminator": [
+        88,
+        97,
+        158,
+        96,
+        238,
+        116,
+        190,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "writer",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "scribe",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  114,
+                  105,
+                  98,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.manifest_sha"
+              }
+            ]
+          }
+        },
+        {
+          "name": "model_mark",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.model_sha"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_receiver",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "BirthArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "give",
+      "docs": [
+        "Gives a scribe to someone else."
+      ],
+      "discriminator": [
+        220,
+        72,
+        114,
+        72,
+        68,
+        33,
+        116,
+        204
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "scribe"
+          ]
+        },
+        {
+          "name": "scribe",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  114,
+                  105,
+                  98,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe.manifest_sha",
+                "account": "Scribe"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Creates the settings. Only the program's upgrade authority can call it, once."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program",
+          "address": "E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq"
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "settings",
+          "type": {
+            "defined": {
+              "name": "Settings"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_settings",
+      "docs": [
+        "Changes the settings (the admin will be the multisig)."
+      ],
+      "discriminator": [
+        123,
+        181,
+        85,
+        122,
+        226,
+        162,
+        130,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "settings",
+          "type": {
+            "defined": {
+              "name": "Settings"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "verify",
+      "docs": [
+        "Verifies a scribe: the verifier's signed pass for this exact scribe and manifest must be the",
+        "instruction just before this one, and the owner burns the set amount of the token."
+      ],
+      "discriminator": [
+        133,
+        161,
+        141,
+        48,
+        120,
+        198,
+        88,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "scribe"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "scribe",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  114,
+                  105,
+                  98,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe.manifest_sha",
+                "account": "Scribe"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "owner_tokens",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "instructions",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "Scribe",
+      "discriminator": [
+        180,
+        139,
+        37,
+        133,
+        137,
+        251,
+        155,
+        152
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "Born",
+      "discriminator": [
+        25,
+        60,
+        205,
+        232,
+        20,
+        186,
+        167,
+        29
+      ]
+    },
+    {
+      "name": "Given",
+      "discriminator": [
+        9,
+        233,
+        124,
+        47,
+        117,
+        222,
+        37,
+        159
+      ]
+    },
+    {
+      "name": "Verified",
+      "discriminator": [
+        102,
+        108,
+        247,
+        112,
+        212,
+        132,
+        41,
+        71
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotUpgradeAuthority",
+      "msg": "Only the program's upgrade authority can initialize"
+    },
+    {
+      "code": 6001,
+      "name": "NotAdmin",
+      "msg": "Only the admin can change settings"
+    },
+    {
+      "code": 6002,
+      "name": "NotOwner",
+      "msg": "Only the scribe's owner can do this"
+    },
+    {
+      "code": 6003,
+      "name": "EmptyManifest",
+      "msg": "The manifest size must be above zero"
+    },
+    {
+      "code": 6004,
+      "name": "Overflow",
+      "msg": "Birth counter overflow"
+    },
+    {
+      "code": 6005,
+      "name": "WrongFeeReceiver",
+      "msg": "Fee receiver does not match the settings"
+    },
+    {
+      "code": 6006,
+      "name": "VerificationClosed",
+      "msg": "Verification opens once the token is set"
+    },
+    {
+      "code": 6007,
+      "name": "AlreadyVerified",
+      "msg": "This scribe is already verified"
+    },
+    {
+      "code": 6008,
+      "name": "MissingPass",
+      "msg": "The verifier's pass must be the instruction before verify"
+    },
+    {
+      "code": 6009,
+      "name": "BadPass",
+      "msg": "The verifier's pass is malformed or for another scribe"
+    },
+    {
+      "code": 6010,
+      "name": "WrongVerifier",
+      "msg": "The pass was not signed by the verifier"
+    },
+    {
+      "code": 6011,
+      "name": "WrongMint",
+      "msg": "Wrong token mint"
+    },
+    {
+      "code": 6012,
+      "name": "BadOwner",
+      "msg": "New owner cannot be the default key"
+    }
+  ],
+  "types": [
+    {
+      "name": "BirthArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "manifest_sha",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "manifest_size",
+            "type": "u32"
+          },
+          {
+            "name": "model_sha",
+            "docs": [
+              "All zeros for a bound brain (no inscribed model)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Born",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "scribe",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "birth_number",
+            "type": "u64"
+          },
+          {
+            "name": "autograph",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "verifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_receiver",
+            "type": "pubkey"
+          },
+          {
+            "name": "birth_fee",
+            "type": "u64"
+          },
+          {
+            "name": "burn_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "burn_amount",
+            "type": "u64"
+          },
+          {
+            "name": "births",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Given",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "scribe",
+            "type": "pubkey"
+          },
+          {
+            "name": "from",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Scribe",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "manifest_sha",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "manifest_size",
+            "type": "u32"
+          },
+          {
+            "name": "writer",
+            "type": "pubkey"
+          },
+          {
+            "name": "model_sha",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "birth_number",
+            "type": "u64"
+          },
+          {
+            "name": "birth_slot",
+            "type": "u64"
+          },
+          {
+            "name": "autograph",
+            "type": "bool"
+          },
+          {
+            "name": "verified",
+            "type": "bool"
+          },
+          {
+            "name": "verified_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Settings",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "verifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_receiver",
+            "type": "pubkey"
+          },
+          {
+            "name": "birth_fee",
+            "type": "u64"
+          },
+          {
+            "name": "burn_mint",
+            "docs": [
+              "Pubkey::default() until the token exists: verification is closed until then."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "burn_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Verified",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "scribe",
+            "type": "pubkey"
+          },
+          {
+            "name": "burned",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}
