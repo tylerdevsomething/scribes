@@ -72,6 +72,10 @@ export class FileCollector {
   found = 0;
   private chunks: (Uint8Array | undefined)[];
   private newest: string | undefined;
+  // Signatures already read during an unfinished pass, so a large file read in many passes (or resumed
+  // after a restart) never fetches the same transaction twice.
+  private processed = new Set<string>();
+  onChunk?: (index: number, bytes: Uint8Array) => void; // each new chunk, e.g. to save progress
   private writer: PublicKey;
   private tag: PublicKey | undefined;
   private program: PublicKey;
@@ -96,13 +100,15 @@ export class FileCollector {
     for (let before: string | undefined; ;) {
       const page = await retry(() => conn.getSignaturesForAddress(tag, { before, until: this.newest, limit: 1000 }, commitment));
       top ??= page[0]?.signature;
-      for (const s of page) if (!s.err) sigs.push(s.signature);
+      for (const s of page) if (!s.err && !this.processed.has(s.signature)) sigs.push(s.signature);
       if (page.length < 1000) break;
       before = page[page.length - 1].signature;
     }
     await pool(sigs, opts.concurrency ?? 8, async (sig) => {
       const tx = await retry(() => conn.getTransaction(sig, { commitment, maxSupportedTransactionVersion: 0 }));
-      if (!tx || tx.meta?.err) return;
+      if (!tx) return; // not served yet: read again next pass
+      this.processed.add(sig);
+      if (tx.meta?.err) return;
       const msg = tx.transaction.message;
       const keys = msg.staticAccountKeys;
       if (!keys[0].equals(this.writer)) return; // not signed by the writer: ignored
@@ -122,10 +128,30 @@ export class FileCollector {
         }
         this.chunks[c.index] = c.bytes.slice();
         this.found++;
+        this.onChunk?.(c.index, this.chunks[c.index]!);
         opts.onProgress?.({ done: this.found, total: this.total });
       }
     }, () => this.complete);
-    if (top) this.newest = top;
+    if (top && sigs.every((s) => this.processed.has(s))) this.newest = top;
+    if (this.complete) this.processed.clear();
+  }
+
+  // Progress of an unfinished read, to save and resume later with restore().
+  progress(): { newest?: string; processed: string[]; found: number[] } {
+    const found: number[] = [];
+    this.chunks.forEach((c, i) => { if (c) found.push(i); });
+    return { newest: this.newest, processed: [...this.processed], found };
+  }
+
+  restore(p: { newest?: string; processed: string[] }, chunks: Map<number, Uint8Array>) {
+    this.newest = p.newest;
+    this.processed = new Set(p.processed);
+    for (const [i, b] of chunks) {
+      const want = i === this.total - 1 ? this.ref.size - i * CHUNK_BYTES : CHUNK_BYTES;
+      if (i >= this.total || this.chunks[i] || b.length !== want) continue;
+      this.chunks[i] = b;
+      this.found++;
+    }
   }
 
   // Takes a copy already gathered from chain earlier (e.g. a disk cache), if it matches the size and

@@ -1,7 +1,8 @@
 // The indexer: follows the Scribes program, rebuilds every scribe's files from chain, reads their
 // attributes and ranks them. Everything it serves can be recomputed by anyone from chain alone.
-import { mkdirSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { CHUNK_BYTES } from '../../lib/src/chunk.ts';
 import type { Connection } from '@solana/web3.js';
 import { FileCollector } from '../../lib/src/chain.ts';
 import { decodeUtf8 } from '../../lib/src/bytes.ts';
@@ -13,6 +14,8 @@ import { decodeJournal, journalTag } from '../../lib/src/journal.ts';
 import { INK_PROGRAM } from '../../lib/src/chain.ts';
 import { PublicKey } from '@solana/web3.js';
 import { allListings, allScribes, marketFeeBps, scribesProgram, ZERO_SHA, type ListingRecord, type ScribeRecord } from '../../lib/src/registry.ts';
+
+const BACKGROUND_BYTES = 2_000_000; // files at least this large are read in the background
 
 export type Status =
   | { state: 'inscribing'; done: number; total: number } // chunks found so far, over all files
@@ -66,6 +69,13 @@ export class Indexer {
   // Files gathered completely from chain under a given writer ("writer:sha"), and journals read so far,
   // kept on disk so a restart serves at once instead of reading every file and journal again.
   private gathered = new Set<string>();
+  private reading = new Map<string, Promise<void>>(); // large files being read in the background
+  private resumed = new Set<string>();
+  private failed = new Map<string, string>();
+  private savers = new Set<() => void>();
+
+  // Saves the progress of every file being read (call before the process exits).
+  flush() { for (const save of this.savers) save(); this.saveState(); }
 
   constructor(conn: Connection, cacheDir: string) {
     this.conn = conn;
@@ -93,13 +103,66 @@ export class Indexer {
   }
 
   // Reads a file's chunks from chain, unless this writer's copy was gathered before and is on disk.
+  // Large files (models) are read in the background, so one model never holds up the rest of the index,
+  // and their progress is saved so a restart carries on instead of starting over.
   private async poll(c: FileCollector, concurrency: number): Promise<void> {
     if (c.complete) return;
     const key = `${c.ref.writer}:${c.ref.sha256}`;
+    const failed = this.failed.get(key);
+    if (failed) throw new Error(failed);
     const path = this.filePath(c.ref.sha256);
     if (this.gathered.has(key) && existsSync(path) && (await c.adopt(new Uint8Array(readFileSync(path))))) return;
-    await c.poll(this.conn, { concurrency });
-    if (c.complete) this.gathered.add(key);
+    if (c.ref.size < BACKGROUND_BYTES) {
+      await c.poll(this.conn, { concurrency });
+      if (c.complete) this.gathered.add(key);
+      return;
+    }
+    if (this.reading.has(key)) return;
+    const job = this.readLarge(c, key, concurrency)
+      .catch((e: Error) => {
+        // A broken file (a chunk of the wrong length, two versions of one chunk) makes its scribes invalid;
+        // anything else (the RPC) is tried again next pass.
+        if (/^chunk d+|two different versions/.test(e.message)) this.failed.set(key, e.message);
+        else console.error(`reading ${c.ref.sha256.slice(0, 8)}: ${e.message}`);
+      })
+      .finally(() => this.reading.delete(key));
+    this.reading.set(key, job);
+  }
+
+  private partialPath(key: string) { return join(this.cacheDir, 'partial', key.replace(':', '-')); }
+
+  private async readLarge(c: FileCollector, key: string, concurrency: number): Promise<void> {
+    const base = this.partialPath(key);
+    mkdirSync(dirname(base), { recursive: true });
+    if (!this.resumed.has(key)) { // first read since start: carry on from saved progress
+      this.resumed.add(key);
+      try {
+        const p = JSON.parse(readFileSync(`${base}.json`, 'utf8')) as { newest?: string; processed: string[]; found: number[] };
+        const bin = readFileSync(`${base}.bin`);
+        c.restore(p, new Map(p.found.map((i) => [i, new Uint8Array(bin.buffer, bin.byteOffset + i * CHUNK_BYTES, Math.min(CHUNK_BYTES, c.ref.size - i * CHUNK_BYTES))])));
+        console.log(`resumed ${c.ref.sha256.slice(0, 8)}: ${c.found}/${c.total} chunks`);
+      } catch { /* nothing saved */ }
+    }
+    const fd = openSync(`${base}.bin`, existsSync(`${base}.bin`) ? 'r+' : 'w');
+    const save = () => { try { writeFileSync(`${base}.json`, JSON.stringify(c.progress())); } catch { /* best effort */ } };
+    const timer = setInterval(save, 20_000);
+    this.savers.add(save);
+    c.onChunk = (i, b) => { try { writeSync(fd, b, 0, b.length, i * CHUNK_BYTES); } catch { /* best effort */ } };
+    try {
+      await c.poll(this.conn, { concurrency });
+    } finally {
+      clearInterval(timer);
+      this.savers.delete(save);
+      c.onChunk = undefined;
+      closeSync(fd);
+      save();
+    }
+    if (c.complete) {
+      await this.load(c); // checks the sha256 and writes the finished file
+      this.gathered.add(key);
+      this.saveState();
+      for (const ext of ['json', 'bin']) try { rmSync(`${base}.${ext}`); } catch { /* already gone */ }
+    }
   }
 
   filePath(sha: string): string { return join(this.cacheDir, 'files', sha); }

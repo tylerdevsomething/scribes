@@ -248,3 +248,6 @@ createServer((req, res) => {
 }).listen(port, () => console.log(`indexer on http://localhost:${port}`));
 
 loop();
+
+// On shutdown (a redeploy sends SIGTERM), save the progress of models still being read.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => { indexer.flush(); process.exit(0); });
