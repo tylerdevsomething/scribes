@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { readFile } from '../../../lib/src/chain.ts';
+import { fileTag, readFile } from '../../../lib/src/chain.ts';
+import { chunkCount } from '../../../lib/src/chunk.ts';
 import { decodeUtf8 } from '../../../lib/src/bytes.ts';
 import { decodeManifest, parseLink, type Manifest } from '../../../lib/src/manifest.ts';
 import { parsePersonality, systemPrompt, type Personality } from '../../../lib/src/personality.ts';
 import { ATTRIBUTES, type Attribute } from '../../../lib/src/rarity.ts';
 import { getScribe, type ScribeView } from '../api.ts';
-import { conn, explorer, short } from '../config.ts';
+import { CLUSTER, conn, explorer, short } from '../config.ts';
 import { Badges, Capsule, Portrait, brainLine } from './Gallery.tsx';
 import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
@@ -99,16 +100,34 @@ export function ScribePage({ address }: { address: string }) {
         <History s={s} />
         {s.files.length > 0 && (
           <div className="panel filelist">
-            <div className="panel-head"><h3>Inscribed files</h3><span className="muted">{s.files.length + 1} with the manifest</span></div>
-            {s.files.map((f) => (
+            <div className="panel-head"><h3>Inscribed files</h3><span className="muted">{s.files.length + 1} files on Solana</span></div>
+            {[...s.files, { role: 'manifest', name: 'manifest.json', size: s.manifestSize, sha256: s.manifestSha, writer: s.writer }].map((f) => (
               <div className="f" key={f.sha256}>
-                <div className="top"><span>{f.name} <span className="chip" style={{ marginLeft: 6 }}>{f.role}</span></span><span className="muted">{f.size < 1e6 ? `${(f.size / 1e3).toFixed(1)} KB` : `${(f.size / 1e6).toFixed(1)} MB`}</span></div>
+                <div className="top">
+                  <span>{f.name} <span className="chip" style={{ marginLeft: 6 }}>{f.role}</span></span>
+                  <span className="muted">{f.size < 1e6 ? `${(f.size / 1e3).toFixed(1)} KB` : `${(f.size / 1e6).toFixed(1)} MB`} · {chunkCount(f.size).toLocaleString()} tx</span>
+                </div>
                 <code>{f.sha256}</code>
+                <FileLink sha={f.sha256} writer={f.writer} />
               </div>
             ))}
+            <p className="muted" style={{ fontSize: 12.5, margin: '10px 0 0' }}>Each file is written in ~1 KB pieces, one transaction each. Every piece names the file's tag account, so its page lists the whole inscription; the hash above is what the pieces must add up to.</p>
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+// The file's tag account: every chunk transaction of the file names it.
+function FileLink({ sha, writer }: { sha: string; writer: string }) {
+  const [tag, setTag] = useState('');
+  useEffect(() => { fileTag(sha, new PublicKey(writer)).then((t) => setTag(t.toBase58())).catch(() => {}); }, [sha, writer]);
+  if (!tag) return null;
+  return (
+    <div className="filelinks">
+      <a href={explorer('address', tag)} target="_blank" rel="noreferrer">View its transactions on {CLUSTER === 'localnet' ? 'Explorer' : 'Solscan'} ↗</a>
+      <span className="muted">tag <code>{short(tag)}</code> · written by <a href={explorer('address', writer)} target="_blank" rel="noreferrer"><code>{short(writer)}</code></a></span>
     </div>
   );
 }

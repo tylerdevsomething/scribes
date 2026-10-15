@@ -5,10 +5,10 @@ export const RPC_URL: string = import.meta.env?.VITE_RPC_URL ?? 'http://127.0.0.
 export const CLUSTER: string = import.meta.env?.VITE_CLUSTER ?? 'localnet';
 export const conn = new Connection(RPC_URL, 'confirmed');
 
+// Links to Solscan (mainnet and devnet); a local chain only opens in Solana Explorer.
 export function explorer(kind: 'address' | 'tx', id: string): string {
-  const c = CLUSTER === 'mainnet' ? '' : CLUSTER === 'localnet'
-    ? `?cluster=custom&customUrl=${encodeURIComponent(RPC_URL)}` : `?cluster=${CLUSTER}`;
-  return `https://explorer.solana.com/${kind}/${id}${c}`;
+  if (CLUSTER === 'localnet') return `https://explorer.solana.com/${kind}/${id}?cluster=custom&customUrl=${encodeURIComponent(RPC_URL)}`;
+  return `https://solscan.io/${kind === 'address' ? 'account' : 'tx'}/${id}${CLUSTER === 'mainnet' ? '' : `?cluster=${CLUSTER}`}`;
 }
 
 // SOL amounts without trailing zeros: 2 → "2", 0.0020842 → "0.002084".
