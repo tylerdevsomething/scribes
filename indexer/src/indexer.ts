@@ -63,11 +63,23 @@ export class Indexer {
   private conn: Connection;
   private cacheDir: string;
   syncedAt = 0;
+  // Files gathered completely from chain under a given writer ("writer:sha"), and journals read so far,
+  // kept on disk so a restart serves at once instead of reading every file and journal again.
+  private gathered = new Set<string>();
 
   constructor(conn: Connection, cacheDir: string) {
     this.conn = conn;
     this.cacheDir = cacheDir;
     mkdirSync(join(cacheDir, 'files'), { recursive: true });
+    try { this.gathered = new Set(JSON.parse(readFileSync(join(cacheDir, 'gathered.json'), 'utf8'))); } catch { /* first run */ }
+    try { this.journals = new Map(Object.entries(JSON.parse(readFileSync(join(cacheDir, 'journals.json'), 'utf8')))); } catch { /* first run */ }
+  }
+
+  private saveState() {
+    try {
+      writeFileSync(join(this.cacheDir, 'gathered.json'), JSON.stringify([...this.gathered]));
+      writeFileSync(join(this.cacheDir, 'journals.json'), JSON.stringify(Object.fromEntries(this.journals)));
+    } catch { /* best effort */ }
   }
 
   setHidden(list: string[]) { this.hidden = new Set(list); }
@@ -78,6 +90,16 @@ export class Indexer {
     let c = this.collectors.get(key);
     if (!c) { c = new FileCollector(ref); this.collectors.set(key, c); }
     return c;
+  }
+
+  // Reads a file's chunks from chain, unless this writer's copy was gathered before and is on disk.
+  private async poll(c: FileCollector, concurrency: number): Promise<void> {
+    if (c.complete) return;
+    const key = `${c.ref.writer}:${c.ref.sha256}`;
+    const path = this.filePath(c.ref.sha256);
+    if (this.gathered.has(key) && existsSync(path) && (await c.adopt(new Uint8Array(readFileSync(path))))) return;
+    await c.poll(this.conn, { concurrency });
+    if (c.complete) this.gathered.add(key);
   }
 
   filePath(sha: string): string { return join(this.cacheDir, 'files', sha); }
@@ -121,6 +143,7 @@ export class Indexer {
       try { await this.syncJournal(e.record.address); } catch { /* try again next pass */ }
     }
     this.rank();
+    this.saveState();
     this.syncedAt = Date.now();
   }
 
@@ -153,7 +176,7 @@ export class Indexer {
 
   private async advance(e: Entry): Promise<void> {
     if (!e.decoded) {
-      await e.manifest.poll(this.conn, { concurrency: 8 });
+      await this.poll(e.manifest, 8);
       if (!e.manifest.complete) return;
       const m = decodeManifest(await this.load(e.manifest));
       const model = m.brain.kind === 'inscribed' ? m.brain.model : ZERO_SHA;
@@ -163,7 +186,7 @@ export class Indexer {
     }
     for (const c of e.files.values()) {
       if (c.complete) continue;
-      await c.poll(this.conn, { concurrency: 16 });
+      await this.poll(c, 16);
     }
     if (![...e.files.values()].every((c) => c.complete)) return;
     const m = e.decoded;

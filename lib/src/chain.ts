@@ -128,6 +128,16 @@ export class FileCollector {
     if (top) this.newest = top;
   }
 
+  // Takes a copy already gathered from chain earlier (e.g. a disk cache), if it matches the size and
+  // sha256. Returns whether it was taken.
+  async adopt(file: Uint8Array): Promise<boolean> {
+    if (this.complete) return true;
+    if (file.length !== this.ref.size || (await sha256Hex(file)) !== this.ref.sha256) return false;
+    for (let i = 0; i < this.total; i++) this.chunks[i] = file.subarray(i * CHUNK_BYTES, Math.min(file.length, (i + 1) * CHUNK_BYTES));
+    this.found = this.total;
+    return true;
+  }
+
   // The whole file, checked against its size and sha256.
   async bytes(): Promise<Uint8Array> {
     if (!this.complete) throw new Error(`only ${this.found} of ${this.total} chunks are on chain`);
