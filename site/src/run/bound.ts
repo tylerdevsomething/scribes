@@ -6,7 +6,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Brain, ReplyContext } from './brain.ts';
 import { runTool, toolDefinitions } from './tools.ts';
-import { API } from '../config.ts';
+import { API, modelName } from '../config.ts';
 
 const MAX_STEPS = 8; // model calls per reply (tool rounds included)
 
@@ -65,7 +65,7 @@ export function loadBound(provider: string, model: string, apiKey: string): Brai
   if (provider !== 'anthropic') throw new Error(`brains bound to "${provider}" cannot run here yet`);
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   let system = '';
-  const brain = brainFrom(`${model} via Anthropic · your key`, async (messages, tools, onDelta, signal) => {
+  const brain = brainFrom(`${modelName(model)} · your key`, async (messages, tools, onDelta, signal) => {
     const stream = client.beta.messages.stream({
       model, max_tokens: 16000, system, messages,
       ...(tools.length ? { tools } : {}),
@@ -124,7 +124,7 @@ export class HostedError extends Error {
 }
 
 export function loadHosted(scribe: string, model: string): Brain {
-  return brainFrom(`${model} · free, on Scribes`, (messages, _tools, onDelta, signal) => hostedCall(scribe, messages, onDelta, signal), null);
+  return { ...brainFrom(`${modelName(model)} · free, on Scribes`, (messages, _tools, onDelta, signal) => hostedCall(scribe, messages, onDelta, signal), null), hosted: true };
 }
 
 export function describeError(e: unknown): string {

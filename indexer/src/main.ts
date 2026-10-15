@@ -71,7 +71,9 @@ const brain = process.env.ANTHROPIC_API_KEY && !process.argv.includes('--no-host
     limits: { perVisitorPerDay: Number(process.env.BRAIN_PER_VISITOR ?? 20), dailyBudgetUsd: Number(process.env.BRAIN_DAILY_USD ?? 5) },
   })
   : null;
-const visitorOf = (req: import('node:http').IncomingMessage) => String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '?').split(',')[0].trim();
+// The visitor's address: the last x-forwarded-for entry is the one our proxy added (earlier ones are
+// whatever the client sent, so they can't be trusted for limits).
+export const visitorOf = (req: import('node:http').IncomingMessage) => String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '?').split(',').pop()!.trim();
 const bounties = new Bounties(conn, (scribe, slot) => activity.ownerAt(scribe, slot));
 // A key is a keypair file, or env:NAME for a JSON key array in an environment variable (hosting).
 const loadKey = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(p.startsWith('env:') ? (process.env[p.slice(4)] ?? '') : readFileSync(p, 'utf8'))));
@@ -202,7 +204,7 @@ createServer((req, res) => {
   if (parts[0] === 'brain') {
     if (!brain) return json(res, 200, { enabled: false });
     if (req.method === 'GET') return json(res, 200, brain.status(visitorOf(req)));
-    if (req.method === 'POST') { body(req, 400_000).then((b) => brain.handle(req, res, visitorOf(req), JSON.parse(new TextDecoder().decode(b) || '{}'), json), (e) => json(res, 400, { error: e.message })); return; }
+    if (req.method === 'POST') { body(req, 400_000).then((b) => brain.handle(req, res, visitorOf(req), JSON.parse(new TextDecoder().decode(b) || '{}'), json)).catch((e) => { if (!res.headersSent) json(res, 400, { error: e.message }); }); return; }
   }
   if (parts[0] === 'mainnet') {
     if (!mainnet) return json(res, 404, { error: 'no mainnet RPC configured (--mainnet-rpc or RPC_MAINNET)' });

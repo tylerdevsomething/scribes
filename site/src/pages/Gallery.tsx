@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fileUrl, getScribes, type ScribeView } from '../api.ts';
 import { Sigil } from '../Sigil.tsx';
-import { sol } from '../config.ts';
+import { modelName, sol } from '../config.ts';
 import { ActivityList, namesOf, useActivity } from './Activity.tsx';
+import { hostedStatus } from '../run/bound.ts';
 
 export function Portrait({ s }: { s: ScribeView }) {
   const pic = s.files.find((f) => f.role === 'picture');
@@ -11,7 +12,7 @@ export function Portrait({ s }: { s: ScribeView }) {
 }
 
 export function brainLine(s: ScribeView): string {
-  if (s.brain?.kind === 'bound') return `Bound to ${s.brain.model}`;
+  if (s.brain?.kind === 'bound') return `Thinks with ${modelName(s.brain.model)}`;
   if (s.model) return `${s.model.name ?? 'Inscribed model'} · ${(s.model.parameters / 1e6).toFixed(s.model.parameters < 1e7 ? 1 : 0)}M`;
   return s.brain ? 'Inscribed brain' : 'Reading its files…';
 }
@@ -71,7 +72,7 @@ export function Gallery() {
   };
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const found = needle ? visible.filter((s) => [s.name, s.purpose, s.model?.name, s.brain?.kind === 'bound' ? s.brain.model : '', String(s.birthNumber + 1)]
+    const found = needle ? visible.filter((s) => [s.name, s.purpose, s.model?.name, s.brain?.kind === 'bound' ? `${s.brain.model} ${modelName(s.brain.model)}` : '', String(s.birthNumber + 1)]
       .some((x) => x?.toLowerCase().includes(needle))) : visible;
     return order(found);
   }, [visible, sort, q]);
@@ -86,6 +87,10 @@ export function Gallery() {
     };
   }, [visible]);
   const latest = useMemo(() => [...visible].reverse().slice(0, 4), [visible]);
+  // A Claude-bound scribe anyone can talk to on the free brain, if the site offers it.
+  const [freeOpen, setFreeOpen] = useState(false);
+  useEffect(() => { hostedStatus().then((h) => setFreeOpen(!!(h.enabled && h.open && (h.remaining ?? 0) > 0))); }, []);
+  const talkTo = useMemo(() => visible.find((s) => s.brain?.kind === 'bound' && s.status.state === 'complete'), [visible]);
 
   return (
     <>
@@ -98,6 +103,7 @@ export function Gallery() {
             <a className="btn primary" href="#/create">Inscribe a scribe</a>
             <a className="btn" href="#/brief">Get the scribe brief</a>
           </div>
+          {freeOpen && talkTo && <p className="muted" style={{ marginTop: 14, fontSize: 14 }}>No wallet or key needed to try one: <a href={`#/scribe/${talkTo.address}`}>talk to {talkTo.name} free →</a></p>}
         </div>
         <div className="ledger">
           <div className="eyebrow">The ledger</div>

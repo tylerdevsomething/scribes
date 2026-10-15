@@ -47,7 +47,19 @@ export interface ScribeRecord {
 
 export async function allScribes(program: Program<Scribes>): Promise<ScribeRecord[]> {
   const list = await program.account.scribe.all();
-  return list.map(({ publicKey, account: a }) => ({
+  return list.map(({ publicKey, account }) => toRecord(publicKey, account));
+}
+
+// One scribe's birth record, read straight from its account (null if there is none).
+export async function fetchScribe(program: Program<Scribes>, address: PublicKey | string): Promise<ScribeRecord | null> {
+  const key = new PublicKey(address);
+  const a = await program.account.scribe.fetchNullable(key);
+  return a ? toRecord(key, a) : null;
+}
+
+type ScribeAccount = Awaited<ReturnType<Program<Scribes>['account']['scribe']['fetch']>>;
+function toRecord(publicKey: PublicKey, a: ScribeAccount): ScribeRecord {
+  return {
     address: publicKey.toBase58(),
     owner: a.owner.toBase58(),
     manifestSha: toHex(Uint8Array.from(a.manifestSha)),
@@ -59,7 +71,7 @@ export async function allScribes(program: Program<Scribes>): Promise<ScribeRecor
     autograph: a.autograph,
     verified: a.verified,
     verifiedSlot: a.verifiedSlot.toNumber(),
-  }));
+  };
 }
 
 export async function birthInstruction(program: Program<Scribes>, args: {

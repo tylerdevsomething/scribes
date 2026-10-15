@@ -376,3 +376,15 @@ a.bounty .meta { display: flex; gap: 14px; color: var(--muted); font-size: 13px;
 
 .filelinks { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-size: 13px; }
 .filelinks a { font-weight: 600; }
+
+.chip.starter { cursor: pointer; border: 1px solid var(--line, #ddd); background: transparent; font: inherit; font-size: 13px; }
+.chip.starter:hover { background: var(--teal-soft, #e3f1ee); }
+
+.rich { white-space: normal; }
+.rich p { margin: 0 0 8px; }
+.rich p:last-child, .rich ul:last-child { margin-bottom: 0; }
+.rich ul { margin: 0 0 8px; padding-left: 20px; }
+.rich li { margin: 2px 0; }
+.rich .rich-head { font-weight: 600; margin: 10px 0 4px; }
+.rich code { font: 13px var(--mono); background: var(--sheet); padding: 1px 4px; border-radius: 4px; }
+.rich a { color: var(--teal); }

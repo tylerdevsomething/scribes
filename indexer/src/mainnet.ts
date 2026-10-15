@@ -38,7 +38,7 @@ export class Mainnet {
   // POST /mainnet/transactions { signatures: [...] }   — readable transactions
   async handle(req: IncomingMessage, res: ServerResponse, parts: string[], url: URL, body: () => Promise<Record<string, unknown>>,
     json: (res: ServerResponse, code: number, data: unknown) => void) {
-    const ip = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '?').split(',')[0].trim();
+    const ip = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '?').split(',').pop()!.trim(); // the entry our proxy added
     if (!allowed(ip)) return json(res, 429, { error: 'slow down: too many requests' });
     try {
       if (parts[1] === 'rpc' && req.method === 'POST') {

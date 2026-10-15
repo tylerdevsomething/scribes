@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { fileTag, readFile } from '../../../lib/src/chain.ts';
 import { chunkCount } from '../../../lib/src/chunk.ts';
-import { decodeUtf8 } from '../../../lib/src/bytes.ts';
+import { decodeUtf8, sha256Hex } from '../../../lib/src/bytes.ts';
+import { fetchScribe, scribesProgram } from '../../../lib/src/registry.ts';
 import { decodeManifest, parseLink, type Manifest } from '../../../lib/src/manifest.ts';
 import { parsePersonality, systemPrompt, type Personality } from '../../../lib/src/personality.ts';
 import { ATTRIBUTES, type Attribute } from '../../../lib/src/rarity.ts';
-import { getScribe, type ScribeView } from '../api.ts';
-import { CLUSTER, conn, explorer, short } from '../config.ts';
+import { fileUrl, getScribe, type ScribeView } from '../api.ts';
+import { CLUSTER, conn, explorer, modelName, short } from '../config.ts';
 import { Badges, Capsule, Portrait, brainLine } from './Gallery.tsx';
 import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
@@ -20,6 +21,7 @@ import { MarketPanel } from './Market.tsx';
 import { VerifyPanel } from './Verify.tsx';
 import { ActivityList, useActivity } from './Activity.tsx';
 import { sol } from '../config.ts';
+import { Rich } from '../Rich.tsx';
 
 const KEY_STORE = 'scribes.anthropic-key';
 // Where each attribute comes from (the brief's colour code).
@@ -83,7 +85,7 @@ export function ScribePage({ address }: { address: string }) {
               {ATTRIBUTES.map((a) => (
                 <tr key={a} className={FROM_CHAIN.includes(a) ? 'chain' : 'files'}>
                   <td>{a}</td>
-                  <td>{a === 'Model' ? (s.brain?.kind === 'bound' ? s.brain.model : s.model?.name ?? short(s.rarity!.traits[a])) : s.rarity!.traits[a]}</td>
+                  <td>{a === 'Model' ? (s.brain?.kind === 'bound' ? modelName(s.brain.model) : s.model?.name ?? short(s.rarity!.traits[a])) : s.rarity!.traits[a]}</td>
                   <td>{(100 * s.rarity!.shares[a]).toFixed(1)}%</td>
                 </tr>
               ))}
@@ -190,14 +192,30 @@ function Wake({ s }: { s: ScribeView }) {
     return [...l, { text, state }];
   });
 
-  // The manifest and personality always come straight from chain.
+  // The hashes come straight from chain: the birth record names the manifest, the manifest names every
+  // file. The bytes come from the indexer's copy when it matches (fast), or are rebuilt from chain.
   async function readSoul(): Promise<Manifest> {
-    step('Reading the manifest from Solana', 'run');
-    const m = decodeManifest(await readFile(conn, parseLink(s.link)));
-    step(`Manifest read from Solana · ${m.files.length} files`, 'ok');
-    step('Reading the personality from Solana', 'run');
-    const p = parsePersonality(decodeUtf8(await readFile(conn, m.files.find((f) => f.role === 'personality')!)));
-    step(`Personality read from Solana · ${p.name}`, 'ok');
+    step('Reading the birth record from Solana', 'run');
+    const r = await fetchScribe(scribesProgram(conn), s.address);
+    if (!r) throw new Error('this scribe has no birth record on Solana');
+    step(`Birth record read from Solana · #${r.birthNumber}`, 'ok');
+    const checked = async (ref: { sha256: string; size: number; writer: string }, what: string) => {
+      step(`Checking the ${what}`, 'run');
+      try {
+        const res = await fetch(fileUrl(ref.sha256));
+        const b = new Uint8Array(await res.arrayBuffer());
+        if (res.ok && b.length === ref.size && (await sha256Hex(b)) === ref.sha256) {
+          step(`${what[0].toUpperCase() + what.slice(1)} matches its hash on Solana`, 'ok');
+          return b;
+        }
+      } catch { /* rebuild it from chain instead */ }
+      step(`Rebuilding the ${what} from Solana`, 'run');
+      const b = await readFile(conn, ref);
+      step(`${what[0].toUpperCase() + what.slice(1)} rebuilt from Solana`, 'ok');
+      return b;
+    };
+    const m = decodeManifest(await checked({ sha256: r.manifestSha, size: r.manifestSize, writer: r.writer }, 'manifest'));
+    const p = parsePersonality(decodeUtf8(await checked(m.files.find((f) => f.role === 'personality')!, 'personality')));
     setManifest(m);
     setPersonality(p);
     return m;
@@ -213,12 +231,12 @@ function Wake({ s }: { s: ScribeView }) {
       } else {
         if (free) {
           setBrain(loadHosted(s.address, m.brain.model));
-          step(`Awake on the free brain · ${m.brain.model}`, 'ok');
+          step(`Awake on the free brain · ${modelName(m.brain.model)}`, 'ok');
         } else {
           if (!key.trim()) throw new Error('Enter your Anthropic API key to wake this scribe.');
           try { if (remember) localStorage.setItem(KEY_STORE, key.trim()); } catch { /* storage unavailable */ }
           setBrain(loadBound(m.brain.provider, m.brain.model, key.trim()));
-          step(`Awake with your key · ${m.brain.model}`, 'ok');
+          step(`Awake with your key · ${modelName(m.brain.model)}`, 'ok');
         }
       }
     } catch (e) {
@@ -235,7 +253,7 @@ function Wake({ s }: { s: ScribeView }) {
       {!brain && (
         <>
           {bound
-            ? <p className="muted">{s.name}'s personality is inscribed on Solana; it thinks with <b>{s.brain?.kind === 'bound' && s.brain.model}</b>.{' '}
+            ? <p className="muted">{s.name}'s personality is inscribed on Solana; it thinks with <b>{s.brain?.kind === 'bound' && modelName(s.brain.model)}</b>.{' '}
                 {free ? <>Talk to it free — <b>{hosted?.remaining} of {hosted?.perDay}</b> free messages left today.</> : <>Use your own Anthropic API key; it is sent only to Anthropic.</>}</p>
             : <p className="muted">Downloads {s.name}'s brain and runtime ({((s.model?.bytes ?? 0) / 1e6 + 9).toFixed(0)} MB), checks every file against its hash on Solana, and runs it right here in your browser.</p>}
           {bound && hosted?.enabled && !free && !ownKey && (
@@ -304,6 +322,23 @@ function ProposalCard({ p, name, update }: { p: Proposal & { state: string; sig?
   );
 }
 
+// First messages to offer, from the scribe's tools (the first few that apply).
+const STARTERS: [tool: string, text: string][] = [
+  ['trending_tokens', "What's trending on Solana right now?"],
+  ['token_report', 'Is BONK safe? Give me a quick report.'],
+  ['new_launches', 'Any new launches worth a look?'],
+  ['swap_quote', 'How much USDC would 1 SOL get me?'],
+  ['wallet_activity', 'What can you tell me about a wallet if I give you its address?'],
+  ['network_status', 'How busy is Solana right now?'],
+  ['bounty_board', 'Any open bounties you could answer?'],
+  ['scribe_market', "What's for sale on the scribe market?"],
+  ['web_search', "What's the latest Solana news?"],
+];
+function starters(tools: string[]): string[] {
+  const picked = STARTERS.filter(([t]) => tools.includes(t)).map(([, text]) => text).slice(0, 3);
+  return [...picked, 'What can you do?'];
+}
+
 function Chat({ brain: given, personality, s }: { brain: Brain; personality: Personality; s: ScribeView }) {
   // When the free brain's limit is reached, the visitor can carry on with their own key in the same conversation.
   const [own, setOwn] = useState<Brain | null>(null);
@@ -323,8 +358,11 @@ function Chat({ brain: given, personality, s }: { brain: Brain; personality: Per
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [history, pending]);
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  async function send() {
-    const text = input.trim();
+  const [left, setLeft] = useState<number | null>(null); // free messages left today
+  useEffect(() => { if (brain.hosted) hostedStatus().then((h) => setLeft(h.remaining ?? null)); }, [brain, history.length]);
+
+  async function send(said?: string) {
+    const text = (said ?? input).trim();
     if (!text || pending !== null) return;
     setInput('');
     setError('');
@@ -352,7 +390,7 @@ function Chat({ brain: given, personality, s }: { brain: Brain; personality: Per
 
   return (
     <div className="chat">
-      <div className="label">{brain.label}</div>
+      <div className="label">{brain.label}{brain.hosted && left !== null ? ` · ${left} free message${left === 1 ? '' : 's'} left today` : ''}</div>
       {(tools.length > 0 || declared.length > 0) && (
         <div className="badges" style={{ marginBottom: 12 }}>
           {tools.map((t) => <span key={t} className="chip teal" title={TOOL_CATALOG.find((x) => x.name === t)?.summary}>⚙ {TOOL_CATALOG.find((x) => x.name === t)?.label ?? t}</span>)}
@@ -360,11 +398,16 @@ function Chat({ brain: given, personality, s }: { brain: Brain; personality: Per
         </div>
       )}
       <div className="log" ref={logRef}>
-        {history.length === 0 && pending === null && <div className="muted" style={{ fontSize: 14 }}>Say hello to {personality.name}.</div>}
+        {history.length === 0 && pending === null && (
+          <div>
+            <div className="muted" style={{ fontSize: 14, marginBottom: 8 }}>Say hello to {personality.name}, or try one of these:</div>
+            <div className="badges">{starters(tools).map((t) => <button key={t} className="chip starter" onClick={() => send(t)}>{t}</button>)}</div>
+          </div>
+        )}
         {history.map((t, i) => (
           <div key={i} style={{ display: 'contents' }}>
             <div className={`bubble ${t.role === 'user' ? 'you' : 'them'}`}>
-              {t.role === 'assistant' && <span className="who">{personality.name}</span>}{t.content}
+              {t.role === 'assistant' ? <><span className="who">{personality.name}</span><Rich text={t.content} /></> : t.content}
             </div>
             {proposals.filter((p) => p.at === i + 1 && t.role === 'user').map((p) => (
               <ProposalCard key={p.id} p={p} name={personality.name} update={(x) => setProposals((l) => l.map((y) => (y.id === p.id ? { ...y, ...x } : y)))} />
@@ -375,7 +418,7 @@ function Chat({ brain: given, personality, s }: { brain: Brain; personality: Per
           <div className="bubble them">
             <span className="who">{personality.name}</span>
             {working.length > 0 && <span className="working">{working.map((w, i) => <span key={i}>⚙ {w}</span>)}</span>}
-            {pending || (working.length ? '' : '…')}
+            {pending ? <Rich text={pending} /> : (working.length ? '' : '…')}
           </div>
         )}
       </div>
@@ -388,7 +431,7 @@ function Chat({ brain: given, personality, s }: { brain: Brain; personality: Per
       )}
       <div className="composer">
         <input value={input} placeholder={`Message ${personality.name}`} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
-        <button className="primary" onClick={send} disabled={pending !== null || !input.trim()}>Send</button>
+        <button className="primary" onClick={() => send()} disabled={pending !== null || !input.trim()}>Send</button>
       </div>
     </div>
   );
