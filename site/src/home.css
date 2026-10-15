@@ -9,7 +9,7 @@ body { overflow-x: clip; }
 }
 
 /* hero */
-.hero2 { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; padding: 72px 0 56px; }
+.hero2 { position: relative; isolation: isolate; display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; padding: 72px 0 56px; }
 .hero2::before {
   content: ""; position: absolute; top: 0; bottom: 0; left: calc(50% - 50vw); right: calc(50% - 50vw); z-index: -1; pointer-events: none;
   background: radial-gradient(55% 70% at 75% 45%, rgba(15, 107, 88, .11), transparent 70%),
@@ -161,7 +161,7 @@ footer.site .foot { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 28px
 @media (max-width: 820px) { .faq { grid-template-columns: 1fr; gap: 6px; } }
 
 /* the scribe page: a wash of the scribe's own colour, and questions to wake it with */
-.profile { position: relative; }
+.profile { position: relative; isolation: isolate; }
 .profile::before {
   content: ""; position: absolute; top: 0; height: 460px; left: calc(50% - 50vw); right: calc(50% - 50vw); z-index: -1; pointer-events: none;
   background: radial-gradient(45% 90% at 22% 0, color-mix(in srgb, var(--tint-ink, transparent) 16%, transparent), transparent 75%),
