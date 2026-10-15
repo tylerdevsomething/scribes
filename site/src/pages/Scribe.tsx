@@ -27,7 +27,7 @@ const KEY_STORE = 'scribes.anthropic-key';
 // Where each attribute comes from (the brief's colour code).
 const FROM_CHAIN: Attribute[] = ['Birth', 'Autograph', 'Verified'];
 
-export function ScribePage({ address }: { address: string }) {
+export function ScribePage({ address, ask }: { address: string; ask?: string }) {
   const [s, setS] = useState<ScribeView | null>(null);
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
@@ -74,7 +74,7 @@ export function ScribePage({ address }: { address: string }) {
           </div>
         )}
         {s.status.state === 'invalid' && <div className="notice bad" style={{ marginBottom: 18 }}>This scribe broke a rule and cannot run: {s.status.reason}</div>}
-        {s.status.state === 'complete' && <Wake s={s} />}
+        {s.status.state === 'complete' && <Wake s={s} ask={ask} />}
         <VerifyPanel s={s} onChange={() => setTick((n) => n + 1)} />
         <MarketPanel s={s} onChange={() => setTick((n) => n + 1)} />
 
@@ -173,7 +173,7 @@ function Share({ s }: { s: ScribeView }) {
   );
 }
 
-function Wake({ s }: { s: ScribeView }) {
+function Wake({ s, ask }: { s: ScribeView; ask?: string }) {
   const [steps, setSteps] = useState<{ text: string; state: string }[]>([]);
   const [brain, setBrain] = useState<Brain | null>(null);
   const [personality, setPersonality] = useState<Personality | null>(null);
@@ -185,6 +185,14 @@ function Wake({ s }: { s: ScribeView }) {
   const [ownKey, setOwnKey] = useState(false); // use my own key instead of the free brain
   useEffect(() => { if (s.brain?.kind === 'bound') hostedStatus().then(setHosted); }, [s.brain?.kind]);
   const free = !!(hosted?.enabled && hosted.open && (hosted.remaining ?? 0) > 0) && !ownKey;
+  // Arriving with a question (a link from the home page): wake on the free brain straight away.
+  const asked = useRef(false);
+  useEffect(() => {
+    const ready = s.brain?.kind === 'inscribed' || free; // an inscribed brain runs here: no allowance needed
+    if (!ask || asked.current || !ready || brain || busy) return;
+    asked.current = true;
+    void wake();
+  }, [ask, free]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const step: Step = (text, state) => setSteps((l) => {
     const last = l[l.length - 1];
@@ -278,7 +286,7 @@ function Wake({ s }: { s: ScribeView }) {
           <ul className="trail">{steps.map((x, i) => <li key={i} className={x.state}>{x.text}</li>)}</ul>
         </details>
       )}
-      {brain && personality && <Chat brain={brain} personality={personality} s={s} />}
+      {brain && personality && <Chat brain={brain} personality={personality} s={s} first={ask} />}
     </div>
   );
 }
@@ -339,7 +347,7 @@ function starters(tools: string[]): string[] {
   return [...picked, 'What can you do?'];
 }
 
-function Chat({ brain: given, personality, s }: { brain: Brain; personality: Personality; s: ScribeView }) {
+function Chat({ brain: given, personality, s, first }: { brain: Brain; personality: Personality; s: ScribeView; first?: string }) {
   // When the free brain's limit is reached, the visitor can carry on with their own key in the same conversation.
   const [own, setOwn] = useState<Brain | null>(null);
   const [limited, setLimited] = useState(false);
@@ -367,6 +375,15 @@ function Chat({ brain: given, personality, s }: { brain: Brain; personality: Per
 
   const [left, setLeft] = useState<number | null>(null); // free messages left today
   useEffect(() => { if (brain.hosted) hostedStatus().then((h) => setLeft(h.remaining ?? null)); }, [brain, history.length]);
+
+  // A question carried in the link is sent once, then dropped from the address (a refresh does not re-ask).
+  const sentFirst = useRef(false);
+  useEffect(() => {
+    if (!first || sentFirst.current) return;
+    sentFirst.current = true;
+    window.history.replaceState(null, '', `#/scribe/${s.address}`);
+    void send(first);
+  }, [first]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function send(said?: string) {
     const text = (said ?? input).trim();

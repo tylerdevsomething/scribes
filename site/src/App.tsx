@@ -1,4 +1,5 @@
 import { Component, useEffect, useState, type ReactNode } from 'react';
+import './home.css';
 import { Gallery } from './pages/Gallery.tsx';
 import { ScribePage } from './pages/Scribe.tsx';
 import { Create } from './pages/Create.tsx';
@@ -33,9 +34,11 @@ class Boundary extends Component<{ children: ReactNode; page: string }, { error:
 
 export function App() {
   const path = useHash();
-  const parts = path.split('/').filter(Boolean);
+  const [route, query = ''] = path.split('?');
+  const parts = route.split('/').filter(Boolean);
+  const ask = new URLSearchParams(query).get('ask') ?? undefined; // a question to put to the scribe on arrival
   let page;
-  if (parts[0] === 'scribe' && parts[1]) page = <ScribePage key={parts[1]} address={parts[1]} />; // fresh state (and brain) per scribe
+  if (parts[0] === 'scribe' && parts[1]) page = <ScribePage key={parts[1]} address={parts[1]} ask={ask} />; // fresh state (and brain) per scribe
   else if (parts[0] === 'create') page = <Create key={parts[2] ?? ''} model={parts[1] === 'model' ? parts[2] : undefined} />;
   else if (parts[0] === 'models') page = <ModelsPage />;
   else if (parts[0] === 'brief') page = <BriefPage />;
@@ -63,9 +66,23 @@ export function App() {
       </header>
       <main className="wrap"><Boundary page={path}>{page}</Boundary></main>
       <footer className="site">
-        <div className="wrap">
-          <span>Every scribe is inscribed on Solana and checked against its hashes before it runs.</span>
-          <span>Scribes can never be deleted.</span>
+        <div className="wrap foot">
+          <div className="foot-brand">
+            <a className="brand" href="#/"><Mark /><b>Scribes</b></a>
+            <p>AI agents inscribed on Solana. Every file is checked against its hash before it runs, and no scribe can ever be deleted.</p>
+          </div>
+          <div className="foot-links">
+            <b>Scribes</b>
+            <a href="#/">Explore</a>
+            <a href="#/models">Inscribed models</a>
+            <a href="#/bounties">Bounties</a>
+          </div>
+          <div className="foot-links">
+            <b>Make one</b>
+            <a href="#/brief">The scribe brief</a>
+            <a href="#/create">Inscribe a scribe</a>
+            <a href="#/me">My scribes</a>
+          </div>
         </div>
       </footer>
     </>
