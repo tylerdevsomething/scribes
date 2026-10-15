@@ -52,6 +52,19 @@ export const GROUP_LABELS: Record<ToolGroup, string> = {
   think: 'Thinking & the web', market: 'Market (live mainnet data)', wallet: 'Wallets (mainnet)', scribes: 'Scribes', propose: 'Actions: you approve each one in your wallet',
 };
 
+// One-click sets of tools for common kinds of scribe.
+export const PRESETS: { name: string; hint: string; tools: string[] }[] = [
+  { name: 'Trader', hint: 'Finds and checks tokens, quotes and drafts trades',
+    tools: ['trending_tokens', 'new_launches', 'token_report', 'token_search', 'token_prices', 'swap_quote', 'network_status', 'wallet_portfolio', 'propose_swap', 'propose_limit_order', 'calculator'] },
+  { name: 'Researcher', hint: 'Digs into tokens, wallets and the news',
+    tools: ['token_report', 'token_search', 'token_prices', 'wallet_portfolio', 'wallet_activity', 'explain_transaction', 'web_search', 'web_fetch', 'calculator', 'clock'] },
+  { name: 'Wallet watcher', hint: 'Tracks wallets and explains transactions',
+    tools: ['wallet_portfolio', 'wallet_activity', 'explain_transaction', 'token_prices', 'token_report', 'clock'] },
+  { name: 'Collector', hint: 'Lives in the scribe world: market, bounties, other scribes',
+    tools: ['scribe_market', 'scribe_lookup', 'ask_scribe', 'bounty_board', 'answer_bounty', 'journal', 'propose_scribe_trade'] },
+  { name: 'Everything', hint: 'All official tools', tools: [...OFFICIAL_TOOLS] },
+];
+
 // Personality tool names are free text: match them loosely to the catalog (name, label or alias).
 export function enabledTools(declared: string[] | undefined): string[] {
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');

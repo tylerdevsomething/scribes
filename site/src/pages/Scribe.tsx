@@ -272,6 +272,7 @@ function ProposalCard({ p, name, update }: { p: Proposal & { state: string; sig?
 function Chat({ brain, personality, s }: { brain: Brain; personality: Personality; s: ScribeView }) {
   const [history, setHistory] = useState<Turn[]>([]);
   const [pending, setPending] = useState<string | null>(null);
+  const [working, setWorking] = useState<string[]>([]); // tools used for the reply in progress
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
   const [proposals, setProposals] = useState<(Proposal & { state: 'open' | 'sent' | 'declined'; sig?: string; error?: string; at: number })[]>([]);
@@ -290,11 +291,13 @@ function Chat({ brain, personality, s }: { brain: Brain; personality: Personalit
     const next: Turn[] = [...history, { role: 'user', content: text }];
     setHistory(next);
     setPending('');
+    setWorking([]);
     abortRef.current = new AbortController();
     try {
       const at = next.length;
       const reply = await brain.reply(systemPrompt(personality, s.journal.map((j) => j.text)), next, (t) => setPending(t), abortRef.current.signal, {
         tools, scribe: { address: s.address, owner: s.owner, name: s.name ?? 'Scribe' }, propose: (p) => setProposals((l) => [...l, { ...p, state: 'open', at }]),
+        onTool: (name) => setWorking((w) => [...w, TOOL_CATALOG.find((t) => t.name === name)?.label ?? name.replace(/_/g, ' ')]),
       });
       setHistory([...next, { role: 'assistant', content: reply }]);
     } catch (e) {
@@ -326,7 +329,13 @@ function Chat({ brain, personality, s }: { brain: Brain; personality: Personalit
             ))}
           </div>
         ))}
-        {pending !== null && <div className="bubble them"><span className="who">{personality.name}</span>{pending || '…'}</div>}
+        {pending !== null && (
+          <div className="bubble them">
+            <span className="who">{personality.name}</span>
+            {working.length > 0 && <span className="working">{working.map((w, i) => <span key={i}>⚙ {w}</span>)}</span>}
+            {pending || (working.length ? '' : '…')}
+          </div>
+        )}
       </div>
       {error && <div className="notice bad" style={{ marginBottom: 10 }}>{error}</div>}
       <div className="composer">

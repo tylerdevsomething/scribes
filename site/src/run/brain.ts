@@ -5,6 +5,7 @@ export interface ReplyContext {
   tools: string[]; // official tools this scribe may use
   scribe: { address: string; owner: string; name: string };
   propose: (p: import('./tools.ts').Proposal) => void; // a drafted action for the viewer to approve
+  onTool?: (name: string, input: unknown) => void; // a tool is being used (shown while the scribe works)
 }
 
 export interface Brain {

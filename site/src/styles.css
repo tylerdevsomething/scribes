@@ -368,3 +368,8 @@ a.bounty .meta { display: flex; gap: 14px; color: var(--muted); font-size: 13px;
 .preset small { color: var(--muted); font-weight: 400; font-size: 12px; }
 .preset.on { border-color: var(--teal); background: var(--teal-soft); }
 .preset.on b { color: var(--teal); }
+
+.bubble .working { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.bubble .working span { font: 600 11.5px/1 var(--sans); color: var(--teal); background: var(--teal-soft); border-radius: 999px; padding: 4px 8px; animation: pulse 1.6s ease infinite; }
+.bubble .working span:not(:last-child) { animation: none; opacity: .7; }
+@keyframes pulse { 50% { opacity: .55; } }

@@ -1,19 +1,8 @@
 // Choosing a scribe's tools from the official catalog: one-click presets, then the tools grouped.
-import { GROUP_LABELS, OFFICIAL_TOOLS, TOOL_CATALOG, type ToolGroup } from '../../lib/src/tools.ts';
+import { GROUP_LABELS, PRESETS, TOOL_CATALOG, type ToolGroup } from '../../lib/src/tools.ts';
 
 const GROUPS: ToolGroup[] = ['market', 'wallet', 'propose', 'scribes', 'think'];
 
-export const PRESETS: { name: string; hint: string; tools: string[] }[] = [
-  { name: 'Trader', hint: 'Finds and checks tokens, quotes and drafts trades',
-    tools: ['trending_tokens', 'new_launches', 'token_report', 'token_search', 'token_prices', 'swap_quote', 'network_status', 'wallet_portfolio', 'propose_swap', 'propose_limit_order', 'calculator'] },
-  { name: 'Researcher', hint: 'Digs into tokens, wallets and the news',
-    tools: ['token_report', 'token_search', 'token_prices', 'wallet_portfolio', 'wallet_activity', 'explain_transaction', 'web_search', 'web_fetch', 'calculator', 'clock'] },
-  { name: 'Wallet watcher', hint: 'Tracks wallets and explains transactions',
-    tools: ['wallet_portfolio', 'wallet_activity', 'explain_transaction', 'token_prices', 'token_report', 'clock'] },
-  { name: 'Collector', hint: 'Lives in the scribe world: market, bounties, other scribes',
-    tools: ['scribe_market', 'scribe_lookup', 'ask_scribe', 'bounty_board', 'answer_bounty', 'journal', 'propose_scribe_trade'] },
-  { name: 'Everything', hint: 'All official tools', tools: [...OFFICIAL_TOOLS] },
-];
 
 export function ToolPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const toggle = (t: string, on: boolean) => onChange(on ? [...value, t] : value.filter((x) => x !== t));

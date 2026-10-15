@@ -15,8 +15,15 @@ export function loadBound(provider: string, model: string, apiKey: string): Brai
     async reply(system, history, onText, signal, ctx) {
       const tools = toolDefinitions(ctx?.tools ?? []);
       const messages: Anthropic.Beta.BetaMessageParam[] = history.map((t) => ({ role: t.role, content: t.content }));
+      // Only the final answer is kept: notes the model writes before calling a tool ("Need the SOL price…")
+      // are working steps, shown live while it works and then replaced.
       let text = '';
+      const answer = (final: Anthropic.Beta.BetaMessage) => {
+        const last = final.content.map((b) => b.type !== 'text').lastIndexOf(true);
+        return final.content.slice(last + 1).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+      };
       for (let step = 0; step < MAX_STEPS; step++) {
+        text = '';
         const stream = client.beta.messages.stream({
           model,
           max_tokens: 16000,
@@ -30,18 +37,23 @@ export function loadBound(provider: string, model: string, apiKey: string): Brai
         }, { signal });
         stream.on('text', (delta) => { text += delta; onText(text); });
         const final = await stream.finalMessage();
-        if (final.stop_reason === 'refusal') return text || '(The model declined to answer that.)';
+        for (const b of final.content) if (b.type === 'server_tool_use') ctx?.onTool?.(b.name, b.input); // ran on Anthropic's side
+        if (final.stop_reason === 'refusal') return answer(final) || '(The model declined to answer that.)';
         if (final.stop_reason === 'pause_turn') { // a long server-side tool turn: continue it
           messages.push({ role: 'assistant', content: final.content });
           continue;
         }
-        if (final.stop_reason !== 'tool_use') return text;
-        if (!final.content.some((b) => b.type === 'tool_use')) return text;
+        if (final.stop_reason !== 'tool_use' || !final.content.some((b) => b.type === 'tool_use')) {
+          const a = answer(final) || text.trim();
+          onText(a);
+          return a;
+        }
         // Run every client tool call of this turn, then return all results in one message.
         messages.push({ role: 'assistant', content: final.content });
         const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
         for (const b of final.content) {
           if (b.type !== 'tool_use') continue;
+          ctx?.onTool?.(b.name, b.input);
           try {
             results.push({ type: 'tool_result', tool_use_id: b.id, content: await runTool(b.name, b.input, { scribe: ctx!.scribe, propose: ctx!.propose, client }) });
           } catch (e) {
@@ -49,9 +61,8 @@ export function loadBound(provider: string, model: string, apiKey: string): Brai
           }
         }
         messages.push({ role: 'user', content: results });
-        if (text && !text.endsWith('\n')) { text += '\n\n'; onText(text); }
       }
-      return text;
+      return text.trim() || 'I ran out of steps before finishing — ask me again, more narrowly.';
     },
   };
 }
