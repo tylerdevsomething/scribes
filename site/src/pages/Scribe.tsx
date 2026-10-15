@@ -10,7 +10,7 @@ import { CLUSTER, conn, explorer, short } from '../config.ts';
 import { Badges, Capsule, Portrait, brainLine } from './Gallery.tsx';
 import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
-import { describeError, loadBound } from '../run/bound.ts';
+import { describeError, HostedError, hostedStatus, loadBound, loadHosted, type HostedStatus } from '../run/bound.ts';
 import { enabledTools, type Proposal } from '../run/tools.ts';
 import { TOOL_CATALOG } from '../../../lib/src/tools.ts';
 import { SystemProgram, PublicKey } from '@solana/web3.js';
@@ -179,6 +179,10 @@ function Wake({ s }: { s: ScribeView }) {
   const [busy, setBusy] = useState(false);
   const [key, setKey] = useState(() => { try { return localStorage.getItem(KEY_STORE) ?? ''; } catch { return ''; } });
   const [remember, setRemember] = useState(false);
+  const [hosted, setHosted] = useState<HostedStatus | null>(null);
+  const [ownKey, setOwnKey] = useState(false); // use my own key instead of the free brain
+  useEffect(() => { if (s.brain?.kind === 'bound') hostedStatus().then(setHosted); }, [s.brain?.kind]);
+  const free = !!(hosted?.enabled && hosted.open && (hosted.remaining ?? 0) > 0) && !ownKey;
 
   const step: Step = (text, state) => setSteps((l) => {
     const last = l[l.length - 1];
@@ -207,10 +211,15 @@ function Wake({ s }: { s: ScribeView }) {
       if (m.brain.kind === 'inscribed') {
         setBrain(await loadInscribed(m, step));
       } else {
-        if (!key.trim()) throw new Error('Enter your Anthropic API key to wake a bound scribe.');
-        try { if (remember) localStorage.setItem(KEY_STORE, key.trim()); } catch { /* storage unavailable */ }
-        setBrain(loadBound(m.brain.provider, m.brain.model, key.trim()));
-        step(`Bound brain ready · ${m.brain.model}`, 'ok');
+        if (free) {
+          setBrain(loadHosted(s.address, m.brain.model));
+          step(`Awake on the free brain · ${m.brain.model}`, 'ok');
+        } else {
+          if (!key.trim()) throw new Error('Enter your Anthropic API key to wake this scribe.');
+          try { if (remember) localStorage.setItem(KEY_STORE, key.trim()); } catch { /* storage unavailable */ }
+          setBrain(loadBound(m.brain.provider, m.brain.model, key.trim()));
+          step(`Awake with your key · ${m.brain.model}`, 'ok');
+        }
       }
     } catch (e) {
       step(describeError(e), 'bad');
@@ -226,15 +235,22 @@ function Wake({ s }: { s: ScribeView }) {
       {!brain && (
         <>
           {bound
-            ? <p className="muted">{s.name}'s personality is inscribed on Solana; its thinking runs on <b>{s.brain?.kind === 'bound' && s.brain.model}</b> with your own Anthropic API key. The key is sent only to Anthropic.</p>
+            ? <p className="muted">{s.name}'s personality is inscribed on Solana; it thinks with <b>{s.brain?.kind === 'bound' && s.brain.model}</b>.{' '}
+                {free ? <>Talk to it free — <b>{hosted?.remaining} of {hosted?.perDay}</b> free messages left today.</> : <>Use your own Anthropic API key; it is sent only to Anthropic.</>}</p>
             : <p className="muted">Downloads {s.name}'s brain and runtime ({((s.model?.bytes ?? 0) / 1e6 + 9).toFixed(0)} MB), checks every file against its hash on Solana, and runs it right here in your browser.</p>}
-          {bound && (
+          {bound && hosted?.enabled && !free && !ownKey && (
+            <div className="notice info" style={{ marginBottom: 12 }}>{hosted.open ? "You've used today's free messages." : 'The free brain is resting until tomorrow.'} You can keep going with your own key.</div>
+          )}
+          {bound && !free && (
             <div className="row" style={{ marginBottom: 12 }}>
               <input className="grow" type="password" placeholder="Anthropic API key" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" />
               <label className="muted" style={{ fontSize: 13.5 }}><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ marginRight: 6 }} />Remember on this device</label>
             </div>
           )}
-          <button className="primary" disabled={busy} onClick={wake}>{busy ? 'Waking…' : `Wake ${s.name}`}</button>
+          <div className="row">
+            <button className="primary" disabled={busy} onClick={wake}>{busy ? 'Waking…' : `Wake ${s.name}${bound && free ? ' — free' : ''}`}</button>
+            {bound && hosted?.enabled && <button className="link" onClick={() => setOwnKey(!ownKey)}>{ownKey ? 'Use the free brain' : 'Use my own key instead'}</button>}
+          </div>
         </>
       )}
       {steps.length > 0 && !brain && <ul className="trail">{steps.map((x, i) => <li key={i} className={x.state}>{x.text}</li>)}</ul>}
@@ -288,7 +304,12 @@ function ProposalCard({ p, name, update }: { p: Proposal & { state: string; sig?
   );
 }
 
-function Chat({ brain, personality, s }: { brain: Brain; personality: Personality; s: ScribeView }) {
+function Chat({ brain: given, personality, s }: { brain: Brain; personality: Personality; s: ScribeView }) {
+  // When the free brain's limit is reached, the visitor can carry on with their own key in the same conversation.
+  const [own, setOwn] = useState<Brain | null>(null);
+  const [limited, setLimited] = useState(false);
+  const [key, setKey] = useState(() => { try { return localStorage.getItem(KEY_STORE) ?? ''; } catch { return ''; } });
+  const brain = own ?? given;
   const [history, setHistory] = useState<Turn[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [working, setWorking] = useState<string[]>([]); // tools used for the reply in progress
@@ -321,6 +342,8 @@ function Chat({ brain, personality, s }: { brain: Brain; personality: Personalit
       setHistory([...next, { role: 'assistant', content: reply }]);
     } catch (e) {
       setHistory(history); // the failed turn is not kept
+      setInput(text);
+      if (e instanceof HostedError && e.limited) setLimited(true);
       setError(describeError(e));
     } finally {
       setPending(null);
@@ -357,6 +380,12 @@ function Chat({ brain, personality, s }: { brain: Brain; personality: Personalit
         )}
       </div>
       {error && <div className="notice bad" style={{ marginBottom: 10 }}>{error}</div>}
+      {limited && !own && s.brain?.kind === 'bound' && (
+        <div className="row" style={{ marginBottom: 10 }}>
+          <input className="grow" type="password" placeholder="Anthropic API key" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" />
+          <button disabled={!key.trim()} onClick={() => { if (s.brain?.kind === 'bound') { setOwn(loadBound(s.brain.provider, s.brain.model, key.trim())); setError(''); } }}>Continue with my key</button>
+        </div>
+      )}
       <div className="composer">
         <input value={input} placeholder={`Message ${personality.name}`} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
         <button className="primary" onClick={send} disabled={pending !== null || !input.trim()}>Send</button>

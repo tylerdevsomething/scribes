@@ -6,6 +6,8 @@
 // GET /scribe/:address  one scribe
 // GET /market           { feeBps } the sale fee
 // GET /activity[?scribe=&limit=]  births, verifications, listings, sales and gifts, newest first
+// GET /brain            free hosted brain: {enabled, open, remaining, perDay} for this visitor
+// POST /brain {scribe, messages}  one Claude call for a Claude-bound scribe (server-sent events)
 // /mainnet/...          read-only mainnet data for the tools (see mainnet.ts)
 // GET /bounties         every bounty: open ones with their question and answers, settled ones
 // GET /bounty/:address  one bounty
@@ -39,6 +41,7 @@ import { Verifier } from './verifier.ts';
 import { ActivityLog } from './activity.ts';
 import { Bounties } from './bounties.ts';
 import { Mainnet } from './mainnet.ts';
+import { HostedBrain } from './brain.ts';
 import { Faucet } from './faucet.ts';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { getMint } from '@solana/spl-token';
@@ -61,6 +64,14 @@ indexer.setOwnerHistory((scribe, slot) => activity.ownerAt(scribe, slot));
 // Mainnet reads for the tools (always mainnet, whatever network the scribes live on).
 const mainnetRpc = process.argv.includes('--mainnet-rpc') ? arg('mainnet-rpc') : process.env.RPC_MAINNET ?? '';
 const mainnet = mainnetRpc ? new Mainnet(mainnetRpc) : null;
+// The free hosted brain (the operator's Anthropic key, with limits).
+const brain = process.env.ANTHROPIC_API_KEY && !process.argv.includes('--no-hosted-brain')
+  ? new HostedBrain({
+    apiKey: process.env.ANTHROPIC_API_KEY, indexer, statePath: join(cache, 'brain.json'),
+    limits: { perVisitorPerDay: Number(process.env.BRAIN_PER_VISITOR ?? 20), dailyBudgetUsd: Number(process.env.BRAIN_DAILY_USD ?? 5) },
+  })
+  : null;
+const visitorOf = (req: import('node:http').IncomingMessage) => String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '?').split(',')[0].trim();
 const bounties = new Bounties(conn, (scribe, slot) => activity.ownerAt(scribe, slot));
 // A key is a keypair file, or env:NAME for a JSON key array in an environment variable (hosting).
 const loadKey = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(p.startsWith('env:') ? (process.env[p.slice(4)] ?? '') : readFileSync(p, 'utf8'))));
@@ -184,10 +195,15 @@ function serveSite(res: import('node:http').ServerResponse, pathname: string) {
 createServer((req, res) => {
   let url = new URL(req.url ?? '/', 'http://x');
   if (url.pathname.startsWith('/api/')) url = new URL(url.pathname.slice(4) + url.search, 'http://x');
-  else if (siteDir && req.method === 'GET' && !/^\/(health|mainnet|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
+  else if (siteDir && req.method === 'GET' && !/^\/(health|brain|mainnet|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
   const parts = url.pathname.split('/').filter(Boolean);
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
+  if (parts[0] === 'brain') {
+    if (!brain) return json(res, 200, { enabled: false });
+    if (req.method === 'GET') return json(res, 200, brain.status(visitorOf(req)));
+    if (req.method === 'POST') { body(req, 400_000).then((b) => brain.handle(req, res, visitorOf(req), JSON.parse(new TextDecoder().decode(b) || '{}'), json), (e) => json(res, 400, { error: e.message })); return; }
+  }
   if (parts[0] === 'mainnet') {
     if (!mainnet) return json(res, 404, { error: 'no mainnet RPC configured (--mainnet-rpc or RPC_MAINNET)' });
     mainnet.handle(req, res, parts, url, () => jsonBody(req), json);

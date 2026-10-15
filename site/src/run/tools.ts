@@ -14,6 +14,7 @@ import { parsePersonality, systemPrompt } from '../../../lib/src/personality.ts'
 import { buyInstruction, listInstruction, scribesProgram } from '../../../lib/src/registry.ts';
 import { fileUrl, getScribe, getScribes, type ScribeView } from '../api.ts';
 import { MARKET_TOOLS, runMarketTool } from './market.ts';
+import { hostedCall } from './bound.ts';
 export { enabledTools, OFFICIAL_TOOLS } from '../../../lib/src/tools.ts';
 
 const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
@@ -35,7 +36,7 @@ export interface Proposal {
 export interface ToolContext {
   scribe: { address: string; owner: string; name: string };
   propose: (p: Proposal) => void;
-  client: Anthropic; // the viewer's own key
+  client: Anthropic | null; // the viewer's own key, or null on the free hosted brain
 }
 
 const obj = (props: Record<string, unknown>, required: string[]) => ({ type: 'object' as const, properties: props, required, additionalProperties: false });
@@ -135,13 +136,18 @@ export async function runTool(name: string, input: unknown, ctx: ToolContext): P
       const pref = target.files.find((f) => f.role === 'personality');
       if (!pref) throw new Error(`${target.name} has no personality yet`);
       const p = parsePersonality(await fetch(fileUrl(pref.sha256)).then((r) => r.text()));
-      const res = await ctx.client.beta.messages.create({
-        model: target.brain.model, max_tokens: 2000,
-        system: systemPrompt(p, target.journal.map((j) => j.text)) + `\nAnother scribe, ${ctx.scribe.name}, is consulting you on behalf of a person. Answer briefly.`,
-        messages: [{ role: 'user', content: question }],
-        output_config: { effort: 'low' },
-        betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
-      });
+      const ask = `(${ctx.scribe.name}, another scribe, is consulting you on behalf of a person. Answer briefly.)\n\n${question}`;
+      // With the viewer's key: call Claude directly. On the free brain: ask through the server (it uses the
+      // other scribe's own inscribed personality).
+      const res = ctx.client
+        ? await ctx.client.beta.messages.create({
+          model: target.brain.model, max_tokens: 2000,
+          system: systemPrompt(p, target.journal.map((j) => j.text)),
+          messages: [{ role: 'user', content: ask }],
+          output_config: { effort: 'low' },
+          betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+        })
+        : await hostedCall(target.address, [{ role: 'user', content: ask }], () => {});
       const answer = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
       return `${target.name} (#${target.birthNumber + 1}) answers: ${answer || '(no answer)'}`;
     }
