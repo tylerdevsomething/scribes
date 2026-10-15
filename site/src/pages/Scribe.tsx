@@ -126,7 +126,7 @@ function FileLink({ sha, writer }: { sha: string; writer: string }) {
   if (!tag) return null;
   return (
     <div className="filelinks">
-      <a href={explorer('address', tag)} target="_blank" rel="noreferrer">View its transactions on {CLUSTER === 'localnet' ? 'Explorer' : 'Solscan'} ↗</a>
+      <a href={explorer('address', tag)} target="_blank" rel="noreferrer">View the inscription on {CLUSTER === 'localnet' ? 'Explorer' : 'Solscan'} ↗</a>
       <span className="muted">tag <code>{short(tag)}</code> · written by <a href={explorer('address', writer)} target="_blank" rel="noreferrer"><code>{short(writer)}</code></a></span>
     </div>
   );
