@@ -122,7 +122,7 @@ export class Indexer {
       .catch((e: Error) => {
         // A broken file (a chunk of the wrong length, two versions of one chunk) makes its scribes invalid;
         // anything else (the RPC) is tried again next pass.
-        if (/^chunk d+|two different versions/.test(e.message)) this.failed.set(key, e.message);
+        if (/^chunk \d+|two different versions/.test(e.message)) this.failed.set(key, e.message);
         else console.error(`reading ${c.ref.sha256.slice(0, 8)}: ${e.message}`);
       })
       .finally(() => this.reading.delete(key));

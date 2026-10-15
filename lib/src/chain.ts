@@ -8,7 +8,7 @@ import {
   ComputeBudgetProgram, Connection, Keypair, PublicKey, Transaction, TransactionInstruction,
   type Commitment, type TransactionSignature,
 } from '@solana/web3.js';
-import { concat, fromHex, sha256, sha256Hex, utf8 } from './bytes.ts';
+import { concat, join, fromHex, sha256, sha256Hex, utf8 } from './bytes.ts';
 import { CHUNK_BYTES, chunkCount, chunkSlice, decodeChunk, encodeChunk } from './chunk.ts';
 
 export const INK_PROGRAM = new PublicKey('noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV');
@@ -167,7 +167,7 @@ export class FileCollector {
   // The whole file, checked against its size and sha256.
   async bytes(): Promise<Uint8Array> {
     if (!this.complete) throw new Error(`only ${this.found} of ${this.total} chunks are on chain`);
-    const file = concat(...(this.chunks as Uint8Array[]));
+    const file = join(this.chunks as Uint8Array[]);
     if (file.length !== this.ref.size) throw new Error('rebuilt file has the wrong size');
     if ((await sha256Hex(file)) !== this.ref.sha256) throw new Error('rebuilt file does not match its sha256');
     return file;

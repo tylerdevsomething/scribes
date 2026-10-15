@@ -21,6 +21,11 @@ export function fromHex(h: string): Uint8Array {
 }
 
 export function concat(...parts: Uint8Array[]): Uint8Array {
+  return join(parts);
+}
+
+// The same for a long list (a model's ~10^5 chunks would overflow the stack as spread arguments).
+export function join(parts: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
   let o = 0;
   for (const p of parts) { out.set(p, o); o += p.length; }
