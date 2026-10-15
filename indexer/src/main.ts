@@ -6,6 +6,7 @@
 // GET /scribe/:address  one scribe
 // GET /market           { feeBps } the sale fee
 // GET /activity[?scribe=&limit=]  births, verifications, listings, sales and gifts, newest first
+// /mainnet/...          read-only mainnet data for the tools (see mainnet.ts)
 // GET /bounties         every bounty: open ones with their question and answers, settled ones
 // GET /bounty/:address  one bounty
 // GET /models           inscribed models anyone can reuse (most used first)
@@ -37,6 +38,7 @@ import { runtimeFiles } from './runtime.ts';
 import { Verifier } from './verifier.ts';
 import { ActivityLog } from './activity.ts';
 import { Bounties } from './bounties.ts';
+import { Mainnet } from './mainnet.ts';
 import { Faucet } from './faucet.ts';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { getMint } from '@solana/spl-token';
@@ -56,6 +58,9 @@ const every = Number(arg('every', '5')) * 1000;
 const indexer = new Indexer(conn, cache);
 const activity = new ActivityLog(conn, join(cache, 'activity.json'));
 indexer.setOwnerHistory((scribe, slot) => activity.ownerAt(scribe, slot));
+// Mainnet reads for the tools (always mainnet, whatever network the scribes live on).
+const mainnetRpc = process.argv.includes('--mainnet-rpc') ? arg('mainnet-rpc') : process.env.RPC_MAINNET ?? '';
+const mainnet = mainnetRpc ? new Mainnet(mainnetRpc) : null;
 const bounties = new Bounties(conn, (scribe, slot) => activity.ownerAt(scribe, slot));
 // A key is a keypair file, or env:NAME for a JSON key array in an environment variable (hosting).
 const loadKey = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(p.startsWith('env:') ? (process.env[p.slice(4)] ?? '') : readFileSync(p, 'utf8'))));
@@ -179,10 +184,15 @@ function serveSite(res: import('node:http').ServerResponse, pathname: string) {
 createServer((req, res) => {
   let url = new URL(req.url ?? '/', 'http://x');
   if (url.pathname.startsWith('/api/')) url = new URL(url.pathname.slice(4) + url.search, 'http://x');
-  else if (siteDir && req.method === 'GET' && !/^\/(health|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
+  else if (siteDir && req.method === 'GET' && !/^\/(health|mainnet|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
   const parts = url.pathname.split('/').filter(Boolean);
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
+  if (parts[0] === 'mainnet') {
+    if (!mainnet) return json(res, 404, { error: 'no mainnet RPC configured (--mainnet-rpc or RPC_MAINNET)' });
+    mainnet.handle(req, res, parts, url, () => jsonBody(req), json);
+    return;
+  }
   if (parts[0] === 'health') return json(res, 200, { syncedAt: indexer.syncedAt, scribes: indexer.list().length });
   if (parts[0] === 'market') return json(res, 200, { feeBps: indexer.feeBps });
   if (parts[0] === 'models') return json(res, 200, indexer.models());

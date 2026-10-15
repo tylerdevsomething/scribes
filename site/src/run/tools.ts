@@ -4,8 +4,8 @@
 // Read tools answer straight away. Proposal tools never move anything: they hand the page a card that
 // builds the transaction only when the viewer presses Approve and signs in their own wallet.
 import Anthropic from '@anthropic-ai/sdk';
-import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
-import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, createTransferCheckedInstruction, getAssociatedTokenAddressSync, getMint } from '@solana/spl-token';
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, TransactionInstruction, type VersionedTransaction } from '@solana/web3.js';
+import { createAssociatedTokenAccountIdempotentInstruction, createTransferCheckedInstruction, getAssociatedTokenAddressSync, getMint } from '@solana/spl-token';
 import { API, CLUSTER, conn, short } from '../config.ts';
 import { calculate } from '../../../lib/src/tools.ts';
 import { journalInstruction } from '../../../lib/src/journal.ts';
@@ -13,9 +13,9 @@ import { answerInstruction } from '../../../lib/src/bounty.ts';
 import { parsePersonality, systemPrompt } from '../../../lib/src/personality.ts';
 import { buyInstruction, listInstruction, scribesProgram } from '../../../lib/src/registry.ts';
 import { fileUrl, getScribe, getScribes, type ScribeView } from '../api.ts';
+import { MARKET_TOOLS, runMarketTool } from './market.ts';
 export { enabledTools, OFFICIAL_TOOLS } from '../../../lib/src/tools.ts';
 
-const JUP = 'https://lite-api.jup.ag';
 const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const program = scribesProgram(conn);
 
@@ -51,11 +51,6 @@ export function toolDefinitions(enabled: string[]): Anthropic.Beta.BetaToolUnion
   if (on('clock')) d.push(client('clock', 'The current date and time (UTC and the viewer\'s local time).', obj({}, [])));
   if (on('web_search')) d.push({ type: 'web_search_20260209', name: 'web_search', max_uses: 3 });
   if (on('web_fetch')) d.push({ type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3 });
-  if (on('token_lookup')) d.push(client('token_lookup', 'Find Solana tokens by name, symbol or mint address. Returns price, market cap, liquidity, holders, 24h change and whether it is verified.', obj({ query: str('Name, symbol or mint address') }, ['query'])));
-  if (on('token_safety')) d.push(client('token_safety', 'Safety check for a Solana token: is minting disabled, can accounts be frozen, how concentrated are the top holders, organic trading score, age. Use before anyone buys an unknown token.', obj({ mint: str('Token mint address') }, ['mint'])));
-  if (on('token_prices')) d.push(client('token_prices', 'Live USD prices for one or more Solana token mint addresses (use token_lookup first if you only know a name). SOL is So11111111111111111111111111111111111111112.', obj({ mints: { type: 'array', items: { type: 'string' }, description: 'Mint addresses, up to 20' } }, ['mints'])));
-  if (on('wallet_portfolio')) d.push(client('wallet_portfolio', `SOL and token balances of a Solana wallet on ${CLUSTER}.`, obj({ address: str('Wallet address') }, ['address'])));
-  if (on('explain_transaction')) d.push(client('explain_transaction', `Explain a Solana transaction on ${CLUSTER} in plain English: who signed, what each instruction did, balance changes and fee.`, obj({ signature: str('Transaction signature') }, ['signature'])));
   if (on('ask_scribe')) d.push(client('ask_scribe', 'Ask another scribe a question and get its answer in its own voice. Identify it by name, birth number (e.g. "#3") or address.', obj({ scribe: str('Name, #number or address'), question: str('What to ask it') }, ['scribe', 'question'])));
   if (on('scribe_lookup')) d.push(client('scribe_lookup', 'Look up scribes by name, birth number or address: purpose, brain, rarity rank and attributes, owner, verified, price if for sale.', obj({ query: str('Name, #number or address') }, ['query'])));
   if (on('scribe_market')) d.push(client('scribe_market', 'The scribe market now: how many exist, floor price, cheapest listings, recent sales.', obj({}, [])));
@@ -64,27 +59,13 @@ export function toolDefinitions(enabled: string[]): Anthropic.Beta.BetaToolUnion
   if (on('journal')) d.push(client('journal', 'Propose writing a memory into your own journal. If your owner approves, it is inscribed on Solana and you will remember it in every future conversation. Write it in first person, one or two sentences, only things worth keeping.', obj({ entry: str('The memory, in your own words') }, ['entry'])));
   if (on('propose_transfer')) d.push(client('propose_transfer', 'Draft a SOL transfer from the person you are talking to. Nothing is sent: they see it and may approve it in their own wallet. Only propose what they asked for.', obj({ to: str('Recipient wallet address'), amount_sol: num('Amount of SOL'), note: str('Why, in a few words') }, ['to', 'amount_sol', 'note'])));
   if (on('propose_token_transfer')) d.push(client('propose_token_transfer', 'Draft a token transfer from the person you are talking to. Nothing is sent until they approve in their wallet.', obj({ mint: str('Token mint address'), to: str('Recipient wallet address'), amount: num('Amount in whole tokens'), note: str('Why, in a few words') }, ['mint', 'to', 'amount', 'note'])));
-  if (on('propose_swap')) d.push(client('propose_swap', 'Draft a token swap through Jupiter (best route, mainnet only). Nothing happens until the person approves in their wallet. Use mint addresses; SOL is So11111111111111111111111111111111111111112.', obj({ from_mint: str('Mint to sell'), to_mint: str('Mint to buy'), amount: num('Amount of the sold token, in whole tokens'), note: str('Why, in a few words') }, ['from_mint', 'to_mint', 'amount', 'note'])));
   if (on('propose_message')) d.push(client('propose_message', 'Draft a public message written to Solana forever (a memo), signed by the person you are talking to if they approve.', obj({ text: str('The message, up to 400 characters') }, ['text'])));
   if (on('propose_scribe_trade')) d.push(client('propose_scribe_trade', 'Draft a scribe trade for the person you are talking to: buy a listed scribe, list one they own, or tip a scribe\'s owner in SOL. Nothing happens until they approve.', obj({ action: { type: 'string', enum: ['buy', 'list', 'tip'] }, scribe: str('Name, #number or address'), amount_sol: num('Listing price or tip in SOL (ignored for buy: the listed price is used)') }, ['action', 'scribe', 'amount_sol'])));
+  for (const n of enabled) if (MARKET_TOOLS[n]) d.push(MARKET_TOOLS[n]);
   return d;
 }
 
 // ---- helpers ----
-
-async function jup<T>(path: string): Promise<T> {
-  const r = await fetch(`${JUP}${path}`);
-  if (!r.ok) throw new Error(`Jupiter answered ${r.status}`);
-  return r.json();
-}
-
-interface JupToken {
-  id: string; name: string; symbol: string; decimals: number; usdPrice?: number; mcap?: number; liquidity?: number;
-  holderCount?: number; isVerified?: boolean; organicScore?: number; organicScoreLabel?: string; createdAt?: string;
-  tokenProgram?: string; stats24h?: { priceChange?: number; buyVolume?: number; sellVolume?: number };
-  audit?: { mintAuthorityDisabled?: boolean; freezeAuthorityDisabled?: boolean; topHoldersPercentage?: number; devBalancePercentage?: number };
-}
-const usd = (n?: number) => (n === undefined ? 'unknown' : n >= 1 ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `$${n.toPrecision(3)}`);
 
 async function findScribe(q: string): Promise<ScribeView> {
   const t = q.trim().replace(/^#/, '');
@@ -116,6 +97,7 @@ const id = () => crypto.randomUUID();
 
 export async function runTool(name: string, input: unknown, ctx: ToolContext): Promise<string> {
   const o = (input ?? {}) as Record<string, unknown>;
+  if (MARKET_TOOLS[name]) return runMarketTool(name, o, ctx);
   switch (name) {
     case 'calculator':
       if (typeof o.expression !== 'string') throw new Error('expression must be a string');
@@ -124,81 +106,6 @@ export async function runTool(name: string, input: unknown, ctx: ToolContext): P
     case 'clock': {
       const now = new Date();
       return `UTC ${now.toISOString().replace('T', ' ').slice(0, 16)} · viewer's local time ${now.toLocaleString()}`;
-    }
-
-    case 'token_lookup': {
-      const q = String(o.query ?? '').trim();
-      if (!q) throw new Error('query is required');
-      const list = (await jup<JupToken[]>(`/tokens/v2/search?query=${encodeURIComponent(q)}`)).slice(0, 5);
-      if (!list.length) return `No token matches "${q}".`;
-      return list.map((t) => `${t.name} (${t.symbol}) — mint ${t.id}${t.isVerified ? ' · verified' : ''}\n  price ${usd(t.usdPrice)} · market cap ${usd(t.mcap)} · liquidity ${usd(t.liquidity)} · ${t.holderCount?.toLocaleString() ?? '?'} holders · 24h ${t.stats24h?.priceChange?.toFixed(1) ?? '?'}%`).join('\n');
-    }
-
-    case 'token_safety': {
-      const mint = pk(o.mint, 'mint').toBase58();
-      const [t] = await jup<JupToken[]>(`/tokens/v2/search?query=${mint}`);
-      if (!t || t.id !== mint) return `Jupiter does not know ${mint}. Unknown tokens deserve extra caution.`;
-      const a = t.audit ?? {};
-      const flags: string[] = [];
-      if (a.mintAuthorityDisabled === false) flags.push('MINT AUTHORITY ENABLED — more can be minted at any time');
-      if (a.freezeAuthorityDisabled === false) flags.push('FREEZE AUTHORITY ENABLED — holders can be frozen');
-      if ((a.topHoldersPercentage ?? 0) > 50) flags.push(`top holders own ${a.topHoldersPercentage!.toFixed(0)}% of supply`);
-      if ((t.liquidity ?? 0) < 10_000) flags.push(`thin liquidity (${usd(t.liquidity)})`);
-      if ((t.organicScore ?? 100) < 30) flags.push(`low organic trading score (${t.organicScore?.toFixed(0)})`);
-      const age = t.createdAt ? Math.floor((Date.now() - Date.parse(t.createdAt)) / 86_400_000) : null;
-      if (age !== null && age < 3) flags.push(`only ${age} day(s) old`);
-      return [
-        `${t.name} (${t.symbol}) — ${t.isVerified ? 'verified on Jupiter' : 'not verified'}`,
-        `mint authority: ${a.mintAuthorityDisabled ? 'disabled' : 'ENABLED'} · freeze authority: ${a.freezeAuthorityDisabled ? 'disabled' : 'ENABLED'}`,
-        `top holders: ${a.topHoldersPercentage?.toFixed(1) ?? '?'}% · developer holds ${a.devBalancePercentage?.toFixed(2) ?? '?'}%`,
-        `organic score: ${t.organicScore?.toFixed(0) ?? '?'} (${t.organicScoreLabel ?? '?'}) · liquidity ${usd(t.liquidity)} · ${t.holderCount?.toLocaleString() ?? '?'} holders${age !== null ? ` · ${age} days old` : ''}`,
-        flags.length ? `RED FLAGS: ${flags.join('; ')}` : 'No red flags found (not a guarantee).',
-      ].join('\n');
-    }
-
-    case 'token_prices': {
-      const mints = Array.isArray(o.mints) ? (o.mints as unknown[]).map((m) => pk(m, 'mint').toBase58()).slice(0, 20) : [];
-      if (!mints.length) throw new Error('mints must be a list of mint addresses');
-      const p = await jup<Record<string, { usdPrice: number; priceChange24h?: number }>>(`/price/v3?ids=${mints.join(',')}`);
-      return mints.map((m) => (p[m] ? `${m}: ${usd(p[m].usdPrice)} (24h ${p[m].priceChange24h?.toFixed(1) ?? '?'}%)` : `${m}: no price`)).join('\n');
-    }
-
-    case 'wallet_portfolio': {
-      const owner = pk(o.address, 'address');
-      const [lamports, a, b] = await Promise.all([
-        conn.getBalance(owner),
-        conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }),
-        conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_2022_PROGRAM_ID }),
-      ]);
-      const tokens = [...a.value, ...b.value]
-        .map((x) => x.account.data.parsed.info as { mint: string; tokenAmount: { uiAmount: number } })
-        .filter((x) => x.tokenAmount.uiAmount > 0)
-        .slice(0, 25);
-      let prices: Record<string, { usdPrice: number }> = {};
-      if (CLUSTER === 'mainnet' && tokens.length) prices = await jup<Record<string, { usdPrice: number }>>(`/price/v3?ids=${tokens.map((t) => t.mint).join(',')}`).catch(() => ({}));
-      const lines = tokens.map((t) => `${t.tokenAmount.uiAmount.toLocaleString()} of ${t.mint}${prices[t.mint] ? ` (${usd(prices[t.mint].usdPrice * t.tokenAmount.uiAmount)})` : ''}`);
-      return `${short(owner.toBase58())} on ${CLUSTER}: ${lamports / LAMPORTS_PER_SOL} SOL${lines.length ? `\ntokens:\n${lines.join('\n')}` : ', no tokens'}`;
-    }
-
-    case 'explain_transaction': {
-      const sig = String(o.signature ?? '').trim();
-      if (!sigOk(sig)) throw new Error('that is not a transaction signature');
-      const tx = await conn.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
-      if (!tx) return `No transaction ${short(sig)} on ${CLUSTER}.`;
-      const keys = tx.transaction.message.accountKeys;
-      const signers = keys.filter((k) => k.signer).map((k) => k.pubkey.toBase58());
-      const steps = tx.transaction.message.instructions.map((ix, i) => {
-        if ('parsed' in ix) return `${i + 1}. ${ix.program}: ${ix.parsed.type ?? 'call'} ${JSON.stringify(ix.parsed.info ?? {}).slice(0, 220)}`;
-        return `${i + 1}. program ${ix.programId.toBase58()} (${ix.data.length} chars of data)`;
-      });
-      const changes = (tx.meta?.preBalances ?? []).map((pre, i) => ({ who: keys[i].pubkey.toBase58(), d: ((tx.meta!.postBalances[i] ?? pre) - pre) / LAMPORTS_PER_SOL }))
-        .filter((c) => c.d !== 0).map((c) => `${short(c.who)} ${c.d > 0 ? '+' : ''}${c.d} SOL`);
-      return [
-        `${tx.meta?.err ? 'FAILED' : 'succeeded'} at slot ${tx.slot}${tx.blockTime ? ` (${new Date(tx.blockTime * 1000).toISOString().slice(0, 16)} UTC)` : ''}`,
-        `signed by ${signers.map(short).join(', ')} · fee ${(tx.meta?.fee ?? 0) / LAMPORTS_PER_SOL} SOL`,
-        'instructions:', ...steps,
-        changes.length ? `SOL changes: ${changes.join(', ')}` : 'no SOL balance changes',
-      ].join('\n');
     }
 
     case 'scribe_lookup':
@@ -313,36 +220,6 @@ export async function runTool(name: string, input: unknown, ctx: ToolContext): P
         },
       });
       return 'Proposed. Nothing moves until the person approves it in their wallet.';
-    }
-
-    case 'propose_swap': {
-      if (CLUSTER !== 'mainnet') return `Swaps go through Jupiter on mainnet; this site is on ${CLUSTER}, so a swap cannot be drafted here.`;
-      const from = pk(o.from_mint, 'from_mint').toBase58(), to = pk(o.to_mint, 'to_mint').toBase58(), amount = n(o.amount, 'amount');
-      const [a] = await jup<JupToken[]>(`/tokens/v2/search?query=${from}`);
-      const [b] = await jup<JupToken[]>(`/tokens/v2/search?query=${to}`);
-      if (!a || !b) throw new Error('unknown token');
-      const raw = Math.round(amount * 10 ** a.decimals);
-      const quote = await jup<{ outAmount: string; priceImpactPct?: string }>(`/ultra/v1/order?inputMint=${from}&outputMint=${to}&amount=${raw}`);
-      const out = Number(quote.outAmount) / 10 ** b.decimals;
-      ctx.propose({
-        id: id(), kind: 'swap', title: `Swap ${a.symbol} → ${b.symbol}`, note: String(o.note ?? ''),
-        lines: [['You sell', `${amount} ${a.symbol}`], ['You get about', `${out.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${b.symbol}`], ['Price impact', `${(Number(quote.priceImpactPct ?? 0) * 100).toFixed(2)}%`], ['Route', 'Jupiter (best route at approval time)']],
-        build: async (me) => {
-          const order = await jup<{ transaction: string; requestId: string }>(`/ultra/v1/order?inputMint=${from}&outputMint=${to}&amount=${raw}&taker=${me.toBase58()}`);
-          if (!order.transaction) throw new Error('Jupiter did not return a transaction (not enough balance?)');
-          const versioned = VersionedTransaction.deserialize(Uint8Array.from(atob(order.transaction), (c) => c.charCodeAt(0)));
-          return {
-            versioned,
-            execute: async (signed) => {
-              const r = await fetch(`${JUP}/ultra/v1/execute`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedTransaction: btoa(String.fromCharCode(...signed.serialize())), requestId: order.requestId }) });
-              const j = await r.json();
-              if (j.status !== 'Success') throw new Error(j.error ?? 'the swap failed');
-              return j.signature as string;
-            },
-          };
-        },
-      });
-      return `Proposed: about ${out} ${b.symbol} for ${amount} ${a.symbol}. Nothing happens until the person approves.`;
     }
 
     case 'propose_message': {

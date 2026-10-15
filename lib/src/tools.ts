@@ -1,7 +1,7 @@
 // The official scribe tools: the catalog, and the parts shared by the site and tests
 // (no browser or chain access here). A scribe gets the tools its personality declares.
 
-export type ToolGroup = 'think' | 'solana' | 'scribes' | 'propose';
+export type ToolGroup = 'think' | 'market' | 'wallet' | 'scribes' | 'propose';
 
 export interface ToolInfo {
   name: string;
@@ -11,29 +11,37 @@ export interface ToolInfo {
   aliases?: string[];
 }
 
+// Market and wallet tools always read real mainnet data, whatever network the site runs on.
 export const TOOL_CATALOG: ToolInfo[] = [
   // thinking and the web
   { name: 'calculator', label: 'Calculator', group: 'think', summary: 'Exact arithmetic.', aliases: ['math'] },
-  { name: 'clock', label: 'Date & time', group: 'think', summary: 'Knows today\'s date and time.', aliases: ['time', 'date'] },
-  { name: 'web_search', label: 'Web search', group: 'think', summary: 'Searches the web.', aliases: ['search'] },
-  { name: 'web_fetch', label: 'Read a web page', group: 'think', summary: 'Reads a page from a link.', aliases: ['fetch', 'browse'] },
-  // Solana, read only
-  { name: 'token_lookup', label: 'Token lookup', group: 'solana', summary: 'Finds a token by name, symbol or address: price, liquidity, verified.', aliases: ['token', 'tokens'] },
-  { name: 'token_safety', label: 'Token safety check', group: 'solana', summary: 'Mint and freeze authority, holder concentration, organic score.', aliases: ['rugcheck', 'safety'] },
-  { name: 'token_prices', label: 'Prices', group: 'solana', summary: 'Live USD prices for tokens.', aliases: ['price', 'prices'] },
-  { name: 'wallet_portfolio', label: 'Wallet portfolio', group: 'solana', summary: 'SOL and tokens a wallet holds.', aliases: ['read_wallet', 'wallet', 'portfolio'] },
-  { name: 'explain_transaction', label: 'Explain a transaction', group: 'solana', summary: 'Plain-English breakdown of a transaction.', aliases: ['transaction', 'tx'] },
+  { name: 'clock', label: 'Date & time', group: 'think', summary: "Knows today's date and time.", aliases: ['time', 'date'] },
+  { name: 'web_search', label: 'Web search', group: 'think', summary: 'Searches the web and news.', aliases: ['search'] },
+  { name: 'web_fetch', label: 'Read a web page', group: 'think', summary: 'Reads a page from a link (docs, threads, announcements).', aliases: ['fetch', 'browse'] },
+  // the market
+  { name: 'trending_tokens', label: 'Trending tokens', group: 'market', summary: 'What is trending, most traded or most organic right now (5m to 24h).', aliases: ['trending', 'hot'] },
+  { name: 'new_launches', label: 'New launches', group: 'market', summary: 'Tokens that just launched, with quick risk flags.', aliases: ['launches', 'new_tokens'] },
+  { name: 'token_report', label: 'Token report', group: 'market', summary: 'Deep dive: price, market cap, liquidity, pools, buys vs sells, top holders, authorities, red flags.', aliases: ['token_safety', 'rugcheck', 'safety', 'analyze'] },
+  { name: 'token_search', label: 'Token search', group: 'market', summary: 'Finds a token by name or symbol and gives its mint.', aliases: ['token_lookup', 'token', 'tokens'] },
+  { name: 'token_prices', label: 'Prices', group: 'market', summary: 'Live USD prices for several tokens at once.', aliases: ['price', 'prices'] },
+  { name: 'swap_quote', label: 'Swap quote', group: 'market', summary: 'Best route and price for a trade, with price impact, without trading.', aliases: ['quote'] },
+  { name: 'network_status', label: 'Network status', group: 'market', summary: 'Solana throughput, priority fees right now, epoch, SOL price.', aliases: ['fees', 'network', 'gas'] },
+  // wallets
+  { name: 'wallet_portfolio', label: 'Wallet portfolio', group: 'wallet', summary: 'Every token a wallet holds with USD values and the total.', aliases: ['read_wallet', 'wallet', 'portfolio'] },
+  { name: 'wallet_activity', label: 'Wallet activity', group: 'wallet', summary: 'What a wallet has been doing: swaps, transfers, mints, in plain words.', aliases: ['activity', 'whale', 'track'] },
+  { name: 'explain_transaction', label: 'Explain a transaction', group: 'wallet', summary: 'Plain-English breakdown of any transaction.', aliases: ['transaction', 'tx'] },
   // scribes
   { name: 'ask_scribe', label: 'Ask another scribe', group: 'scribes', summary: 'Consults another scribe and brings back its answer.', aliases: ['consult'] },
   { name: 'scribe_lookup', label: 'Look up a scribe', group: 'scribes', summary: 'Finds a scribe by name or number: rarity, owner, price.', aliases: ['scribes'] },
-  { name: 'scribe_market', label: 'Read the market', group: 'scribes', summary: 'Floor price, listings and recent sales.', aliases: ['market'] },
-  { name: 'bounty_board', label: 'Bounty board', group: 'scribes', summary: 'Reads open bounties: questions with a SOL reward.', aliases: ['bounties'] },
+  { name: 'scribe_market', label: 'Scribe market', group: 'scribes', summary: 'Floor price, listings and recent sales of scribes.', aliases: ['market'] },
+  { name: 'bounty_board', label: 'Bounty board', group: 'scribes', summary: 'Open bounties: questions with a SOL reward.', aliases: ['bounties'] },
   { name: 'answer_bounty', label: 'Answer a bounty', group: 'scribes', summary: 'Proposes an answer to a bounty; the owner approves and it is inscribed.', aliases: ['answer'] },
   { name: 'journal', label: 'Journal', group: 'scribes', summary: 'Proposes a memory; if the owner approves, it is inscribed and remembered.', aliases: ['remember', 'memory', 'diary'] },
-  // proposals: drafted by the scribe, approved (or not) in the viewer's own wallet
+  // actions: drafted by the scribe, approved (or not) in the viewer's own wallet
+  { name: 'propose_swap', label: 'Swap', group: 'propose', summary: "Drafts a swap at Jupiter's best route.", aliases: ['swap', 'trade'] },
+  { name: 'propose_limit_order', label: 'Limit order', group: 'propose', summary: 'Drafts a buy or sell that fills only at your price.', aliases: ['limit', 'limit_order'] },
   { name: 'propose_transfer', label: 'Send SOL', group: 'propose', summary: 'Drafts a SOL transfer.', aliases: ['transfer', 'send'] },
   { name: 'propose_token_transfer', label: 'Send tokens', group: 'propose', summary: 'Drafts a token transfer.' },
-  { name: 'propose_swap', label: 'Swap (Jupiter)', group: 'propose', summary: 'Drafts a token swap at the best route (mainnet).', aliases: ['swap', 'trade'] },
   { name: 'propose_message', label: 'On-chain message', group: 'propose', summary: 'Drafts a public message written to Solana.', aliases: ['memo', 'message'] },
   { name: 'propose_scribe_trade', label: 'Buy, list or tip scribes', group: 'propose', summary: 'Drafts buying, listing or tipping a scribe.', aliases: ['trade_scribe'] },
 ];
@@ -41,7 +49,7 @@ export const TOOL_CATALOG: ToolInfo[] = [
 export const OFFICIAL_TOOLS = TOOL_CATALOG.map((t) => t.name);
 
 export const GROUP_LABELS: Record<ToolGroup, string> = {
-  think: 'Thinking & the web', solana: 'Solana (read only)', scribes: 'Scribes', propose: 'Proposals — you approve in your wallet',
+  think: 'Thinking & the web', market: 'Market (live mainnet data)', wallet: 'Wallets (mainnet)', scribes: 'Scribes', propose: 'Actions: you approve each one in your wallet',
 };
 
 // Personality tool names are free text: match them loosely to the catalog (name, label or alias).
