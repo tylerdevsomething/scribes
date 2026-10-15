@@ -18,7 +18,7 @@ const CLAUDE_MODELS = [
 
 interface ModelInfo { sha256: string; size: number; fileName: string; name: string | null; parameters: number; scribes: number }
 
-export function Create() {
+export function Create({ model }: { model?: string } = {}) {
   const [mode, setMode] = useState<'write' | 'upload'>('write');
   const [parts, setParts] = useState<Parts | null>(null); // set when the user asks for a check
   const [id, setId] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export function Create() {
             <button className={mode === 'write' ? 'on' : ''} onClick={() => setMode('write')}>Write it here</button>
             <button className={mode === 'upload' ? 'on' : ''} onClick={() => setMode('upload')}>Upload files</button>
           </div>
-          {mode === 'write' ? <Builder busy={!!busy} onCheck={check} /> : <Uploader busy={!!busy} onCheck={check} />}
+          {mode === 'write' ? <Builder model={model} busy={!!busy} onCheck={check} /> : <Uploader busy={!!busy} onCheck={check} />}
         </>
       )}
 
@@ -81,7 +81,7 @@ export function Create() {
 
 // ---- write a scribe in the browser ----
 
-function Builder({ busy, onCheck }: { busy: boolean; onCheck: (p: Parts) => void }) {
+function Builder({ model, busy, onCheck }: { model?: string; busy: boolean; onCheck: (p: Parts) => void }) {
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [voice, setVoice] = useState('');
@@ -98,7 +98,13 @@ function Builder({ busy, onCheck }: { busy: boolean; onCheck: (p: Parts) => void
 
   useEffect(() => {
     // No inscribed models to reuse (or no answer): start on Claude instead of a disabled choice.
-    fetch(`${API}/models`).then((r) => r.json()).then((l: ModelInfo[]) => { setModels(l); if (l[0]) setModelSha(l[0].sha256); else setBrain('claude'); })
+    fetch(`${API}/models`).then((r) => r.json()).then((l: ModelInfo[]) => {
+      // Largest first: the most capable model is the default (or the one asked for in the link).
+      const sorted = [...l].sort((a, b) => b.parameters - a.parameters);
+      setModels(sorted);
+      const pick = sorted.find((m) => m.sha256 === model) ?? sorted[0];
+      if (pick) setModelSha(pick.sha256); else setBrain('claude');
+    })
       .catch(() => { setModels([]); setBrain('claude'); });
   }, []);
   useEffect(() => {

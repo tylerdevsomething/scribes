@@ -8,6 +8,7 @@ import { BountiesPage, BountyPage } from './pages/Bounties.tsx';
 import { CLUSTER } from './config.ts';
 import { Mark } from './Sigil.tsx';
 import { WalletButton } from './WalletButton.tsx';
+import { ModelsPage } from './pages/Models.tsx';
 
 function useHash(): string {
   const [h, setH] = useState(location.hash.slice(1) || '/');
@@ -35,7 +36,8 @@ export function App() {
   const parts = path.split('/').filter(Boolean);
   let page;
   if (parts[0] === 'scribe' && parts[1]) page = <ScribePage key={parts[1]} address={parts[1]} />; // fresh state (and brain) per scribe
-  else if (parts[0] === 'create') page = <Create />;
+  else if (parts[0] === 'create') page = <Create key={parts[2] ?? ''} model={parts[1] === 'model' ? parts[2] : undefined} />;
+  else if (parts[0] === 'models') page = <ModelsPage />;
   else if (parts[0] === 'brief') page = <BriefPage />;
   else if (parts[0] === 'me') page = <Me />;
   else if (parts[0] === 'bounties') page = <BountiesPage />;
@@ -50,6 +52,7 @@ export function App() {
           <nav className="main">
             <a className={on('')} href="#/">Explore</a>
             <a className={on('create')} href="#/create">Inscribe</a>
+            <a className={on('models')} href="#/models">Models</a>
             <a className={on('bounties') || on('bounty')} href="#/bounties">Bounties</a>
             <a className={on('brief')} href="#/brief">Brief</a>
             <a className={on('me')} href="#/me">My scribes</a>

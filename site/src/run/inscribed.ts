@@ -19,7 +19,31 @@ const RECENT_TURNS = 8;
 
 export type Step = (text: string, state: 'run' | 'ok' | 'bad') => void;
 
+// Large files are kept in this browser's Cache Storage after they pass their hash check, so waking the
+// same model again needs no download. A cached copy is checked against its hash again before use.
+const CACHE = 'scribes-files-v1';
+const KEEP_BYTES = 1_000_000;
+
+async function fromCache(f: FileRef, step: Step): Promise<Uint8Array | null> {
+  try {
+    const hit = await (await caches.open(CACHE)).match(fileUrl(f.sha256));
+    if (!hit) return null;
+    const bytes = new Uint8Array(await hit.arrayBuffer());
+    if (bytes.length !== f.size || (await sha256Hex(bytes)) !== f.sha256) return null;
+    step(`${f.name}: ${(f.size / 1e6).toFixed(1)} MB from this browser, matches its inscribed hash`, 'ok');
+    return bytes;
+  } catch { return null; } // no Cache Storage here (private window, plain http…)
+}
+
+async function keep(f: FileRef, bytes: Uint8Array) {
+  try { await (await caches.open(CACHE)).put(fileUrl(f.sha256), new Response(bytes as Uint8Array<ArrayBuffer>)); } catch { /* out of space: download next time */ }
+}
+
 async function fetchChecked(f: FileRef, step: Step): Promise<Uint8Array> {
+  if (f.size >= KEEP_BYTES) {
+    const cached = await fromCache(f, step);
+    if (cached) return cached;
+  }
   step(`${f.name}: downloading ${(f.size / 1e6).toFixed(1)} MB`, 'run');
   const res = await fetch(fileUrl(f.sha256));
   if (!res.ok || !res.body) throw new Error(`${f.name}: not available (${res.status})`);
@@ -38,6 +62,7 @@ async function fetchChecked(f: FileRef, step: Step): Promise<Uint8Array> {
   if (got !== f.size) throw new Error(`${f.name}: incomplete download`);
   if (bytes.length !== f.size || (await sha256Hex(bytes)) !== f.sha256) throw new Error(`${f.name}: does not match the inscribed hash — refused`);
   step(`${f.name}: ${(f.size / 1e6).toFixed(1)} MB, matches its inscribed hash`, 'ok');
+  if (f.size >= KEEP_BYTES) void keep(f, bytes);
   return bytes;
 }
 

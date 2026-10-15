@@ -388,3 +388,7 @@ a.bounty .meta { display: flex; gap: 14px; color: var(--muted); font-size: 13px;
 .rich .rich-head { font-weight: 600; margin: 10px 0 4px; }
 .rich code { font: 13px var(--mono); background: var(--sheet); padding: 1px 4px; border-radius: 4px; }
 .rich a { color: var(--teal); }
+
+.models { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 18px; margin-top: 24px; }
+@media (max-width: 520px) { .models { grid-template-columns: 1fr; } }
+.model .facts span:last-child { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
