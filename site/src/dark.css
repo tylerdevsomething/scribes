@@ -143,7 +143,8 @@ footer.site { background: rgba(0, 0, 0, .35); border-top: 1px solid var(--line);
 .faq details[open] { border-color: rgba(52, 227, 180, .35); }
 
 /* the brain picker: every inscribed model as a card */
-.brains { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 4px; }
+.brains { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); grid-auto-rows: auto; align-content: start; align-items: stretch; gap: 12px; margin-top: 4px; }
+.brains > .brain-card { margin: 0; height: auto; }
 .brain-card {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; white-space: normal;
   padding: 16px; border-radius: 18px; border: 1px solid var(--line-strong); background: var(--sheet); color: var(--ink); font: inherit; line-height: 1.35;
