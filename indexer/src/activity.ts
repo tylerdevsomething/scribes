@@ -11,7 +11,10 @@ export type Activity =
   | { kind: 'listed'; scribe: string; seller: string; price: number }
   | { kind: 'unlisted'; scribe: string }
   | { kind: 'sold'; scribe: string; from: string; to: string; price: number; fee: number }
-  | { kind: 'given'; scribe: string; from: string; to: string };
+  | { kind: 'given'; scribe: string; from: string; to: string }
+  | { kind: 'bounty_posted'; scribe: ''; bounty: string; poster: string; reward: number; deadlineSlot: number; questionSha: string }
+  | { kind: 'bounty_awarded'; scribe: string; bounty: string; owner: string; reward: number; fee: number }
+  | { kind: 'bounty_refunded'; scribe: ''; bounty: string; reward: number };
 
 export type Entry = Activity & { signature: string; slot: number; time: number | null };
 
@@ -26,6 +29,9 @@ function toActivity(name: string, d: Record<string, any>): Activity | null {
     case 'unlisted': case 'Unlisted': return { kind: 'unlisted', scribe: s(d.scribe) };
     case 'sold': case 'Sold': return { kind: 'sold', scribe: s(d.scribe), from: s(d.from), to: s(d.to), price: n(d.price), fee: n(d.fee) };
     case 'given': case 'Given': return { kind: 'given', scribe: s(d.scribe), from: s(d.from), to: s(d.to) };
+    case 'bountyPosted': case 'BountyPosted': return { kind: 'bounty_posted', scribe: '', bounty: s(d.bounty), poster: s(d.poster), reward: n(d.reward), deadlineSlot: n(d.deadlineSlot ?? d.deadline_slot), questionSha: Buffer.from(d.questionSha ?? d.question_sha).toString('hex') };
+    case 'bountyAwarded': case 'BountyAwarded': return { kind: 'bounty_awarded', scribe: s(d.scribe), bounty: s(d.bounty), owner: s(d.owner), reward: n(d.reward), fee: n(d.fee) };
+    case 'bountyRefunded': case 'BountyRefunded': return { kind: 'bounty_refunded', scribe: '', bounty: s(d.bounty), reward: n(d.reward) };
     default: return null;
   }
 }
@@ -88,11 +94,15 @@ export class ActivityLog {
     return owner;
   }
 
+  // Every bounty event, oldest first.
+  bountyEvents(): Entry[] { return this.entries.filter((e) => e.kind.startsWith('bounty_')); }
+
   // Newest first.
   list(opts: { scribe?: string; limit?: number } = {}): Entry[] {
     const out: Entry[] = [];
     for (let i = this.entries.length - 1; i >= 0 && out.length < (opts.limit ?? 50); i--) {
       const e = this.entries[i];
+      if (e.kind.startsWith('bounty_') && e.kind !== 'bounty_awarded') continue; // shown on the bounty board instead
       if (!opts.scribe || e.scribe === opts.scribe) out.push(e);
     }
     return out;

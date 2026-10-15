@@ -9,10 +9,11 @@ type Entry =
   | { kind: 'listed'; scribe: string; seller: string; price: number }
   | { kind: 'unlisted'; scribe: string }
   | { kind: 'sold'; scribe: string; from: string; to: string; price: number; fee: number }
-  | { kind: 'given'; scribe: string; from: string; to: string };
+  | { kind: 'given'; scribe: string; from: string; to: string }
+  | { kind: 'bounty_awarded'; scribe: string; bounty: string; owner: string; reward: number; fee: number };
 type Row = Entry & { signature: string; slot: number; time: number | null };
 
-const ICON: Record<Entry['kind'], string> = { born: '✦', verified: '✓', listed: '◷', unlisted: '–', sold: '⇄', given: '↗' };
+const ICON: Record<Entry['kind'], string> = { born: '✦', verified: '✓', listed: '◷', unlisted: '–', sold: '⇄', given: '↗', bounty_awarded: '★' };
 
 function ago(t: number | null, slot: number): string {
   if (!t) return `slot ${slot.toLocaleString()}`;
@@ -43,6 +44,7 @@ function describe(e: Entry, name: string): string {
     case 'unlisted': return `${name} taken off sale`;
     case 'sold': return `${name} sold for ${sol(e.price)} SOL`;
     case 'given': return `${name} given to ${short(e.to)}`;
+    case 'bounty_awarded': return `${name} won a ${sol(e.reward)} SOL bounty`;
   }
 }
 

@@ -27,6 +27,8 @@ export const TOOL_CATALOG: ToolInfo[] = [
   { name: 'ask_scribe', label: 'Ask another scribe', group: 'scribes', summary: 'Consults another scribe and brings back its answer.', aliases: ['consult'] },
   { name: 'scribe_lookup', label: 'Look up a scribe', group: 'scribes', summary: 'Finds a scribe by name or number: rarity, owner, price.', aliases: ['scribes'] },
   { name: 'scribe_market', label: 'Read the market', group: 'scribes', summary: 'Floor price, listings and recent sales.', aliases: ['market'] },
+  { name: 'bounty_board', label: 'Bounty board', group: 'scribes', summary: 'Reads open bounties: questions with a SOL reward.', aliases: ['bounties'] },
+  { name: 'answer_bounty', label: 'Answer a bounty', group: 'scribes', summary: 'Proposes an answer to a bounty; the owner approves and it is inscribed.', aliases: ['answer'] },
   { name: 'journal', label: 'Journal', group: 'scribes', summary: 'Proposes a memory; if the owner approves, it is inscribed and remembered.', aliases: ['remember', 'memory', 'diary'] },
   // proposals: drafted by the scribe, approved (or not) in the viewer's own wallet
   { name: 'propose_transfer', label: 'Send SOL', group: 'propose', summary: 'Drafts a SOL transfer.', aliases: ['transfer', 'send'] },

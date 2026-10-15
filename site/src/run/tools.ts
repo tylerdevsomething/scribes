@@ -9,6 +9,7 @@ import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountId
 import { API, CLUSTER, conn, short } from '../config.ts';
 import { calculate } from '../../../lib/src/tools.ts';
 import { journalInstruction } from '../../../lib/src/journal.ts';
+import { answerInstruction } from '../../../lib/src/bounty.ts';
 import { parsePersonality, systemPrompt } from '../../../lib/src/personality.ts';
 import { buyInstruction, listInstruction, scribesProgram } from '../../../lib/src/registry.ts';
 import { fileUrl, getScribe, getScribes, type ScribeView } from '../api.ts';
@@ -58,6 +59,8 @@ export function toolDefinitions(enabled: string[]): Anthropic.Beta.BetaToolUnion
   if (on('ask_scribe')) d.push(client('ask_scribe', 'Ask another scribe a question and get its answer in its own voice. Identify it by name, birth number (e.g. "#3") or address.', obj({ scribe: str('Name, #number or address'), question: str('What to ask it') }, ['scribe', 'question'])));
   if (on('scribe_lookup')) d.push(client('scribe_lookup', 'Look up scribes by name, birth number or address: purpose, brain, rarity rank and attributes, owner, verified, price if for sale.', obj({ query: str('Name, #number or address') }, ['query'])));
   if (on('scribe_market')) d.push(client('scribe_market', 'The scribe market now: how many exist, floor price, cheapest listings, recent sales.', obj({}, [])));
+  if (on('bounty_board')) d.push(client('bounty_board', 'Open bounties: questions people will pay SOL for, with the reward, time left and how many answers so far.', obj({}, [])));
+  if (on('answer_bounty')) d.push(client('answer_bounty', 'Propose your answer to an open bounty (by its address from bounty_board). If your owner approves, the answer is inscribed; if the poster picks it, your owner is paid.', obj({ bounty: str('Bounty address'), answer: str('Your answer, up to about 800 characters') }, ['bounty', 'answer'])));
   if (on('journal')) d.push(client('journal', 'Propose writing a memory into your own journal. If your owner approves, it is inscribed on Solana and you will remember it in every future conversation. Write it in first person, one or two sentences, only things worth keeping.', obj({ entry: str('The memory, in your own words') }, ['entry'])));
   if (on('propose_transfer')) d.push(client('propose_transfer', 'Draft a SOL transfer from the person you are talking to. Nothing is sent: they see it and may approve it in their own wallet. Only propose what they asked for.', obj({ to: str('Recipient wallet address'), amount_sol: num('Amount of SOL'), note: str('Why, in a few words') }, ['to', 'amount_sol', 'note'])));
   if (on('propose_token_transfer')) d.push(client('propose_token_transfer', 'Draft a token transfer from the person you are talking to. Nothing is sent until they approve in their wallet.', obj({ mint: str('Token mint address'), to: str('Recipient wallet address'), amount: num('Amount in whole tokens'), note: str('Why, in a few words') }, ['mint', 'to', 'amount', 'note'])));
@@ -234,6 +237,35 @@ export async function runTool(name: string, input: unknown, ctx: ToolContext): P
       });
       const answer = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
       return `${target.name} (#${target.birthNumber + 1}) answers: ${answer || '(no answer)'}`;
+    }
+
+    case 'bounty_board': {
+      const [list, slot] = await Promise.all([fetch(`${API}/bounties`).then((r) => r.json()), conn.getSlot('confirmed')]);
+      const open = (list as { address: string; question: string | null; reward: number; deadlineSlot: number; state: string; answers: unknown[] }[])
+        .filter((b) => b.state === 'open' && b.question && b.deadlineSlot > slot);
+      if (!open.length) return 'No open bounties right now.';
+      return open.slice(0, 10).map((b) => [
+        `${b.address} — ${b.reward / LAMPORTS_PER_SOL} SOL, ${Math.max(0, Math.round((b.deadlineSlot - slot) * 0.4 / 3600))} h left, ${b.answers.length} answers`,
+        `  "${b.question}"`,
+      ].join('\n')).join('\n');
+    }
+
+    case 'answer_bounty': {
+      const bounty = pk(o.bounty, 'bounty');
+      const answer = String(o.answer ?? '').trim();
+      if (!answer) throw new Error('answer is required');
+      const b = await fetch(`${API}/bounty/${bounty.toBase58()}`).then((r) => (r.ok ? r.json() : null));
+      if (!b || b.state !== 'open') return 'That bounty is not open.';
+      const scribe = new PublicKey(ctx.scribe.address);
+      ctx.propose({
+        id: id(), kind: 'journal', title: `Answer a ${b.reward / LAMPORTS_PER_SOL} SOL bounty`,
+        lines: [['Question', `“${b.question}”`], ['Answer', `“${answer}”`]],
+        note: "Inscribed as this scribe's answer. If the poster picks it, the owner is paid. Only the owner can approve.",
+        ownerOnly: ctx.scribe.owner,
+        build: async (me) => ({ ixs: [await answerInstruction(me, bounty, scribe, answer)] }),
+        done: 'Answer inscribed.',
+      });
+      return 'Proposed. If your owner approves, your answer is inscribed on the bounty.';
     }
 
     case 'journal': {

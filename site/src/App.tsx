@@ -4,6 +4,7 @@ import { ScribePage } from './pages/Scribe.tsx';
 import { Create } from './pages/Create.tsx';
 import { BriefPage } from './pages/Brief.tsx';
 import { Me } from './pages/Me.tsx';
+import { BountiesPage, BountyPage } from './pages/Bounties.tsx';
 import { CLUSTER } from './config.ts';
 import { Mark } from './Sigil.tsx';
 import { WalletButton } from './WalletButton.tsx';
@@ -37,6 +38,8 @@ export function App() {
   else if (parts[0] === 'create') page = <Create />;
   else if (parts[0] === 'brief') page = <BriefPage />;
   else if (parts[0] === 'me') page = <Me />;
+  else if (parts[0] === 'bounties') page = <BountiesPage />;
+  else if (parts[0] === 'bounty' && parts[1]) page = <BountyPage key={parts[1]} address={parts[1]} />;
   else page = <Gallery />;
   const on = (p: string) => ((parts[0] ?? '') === p || (p === '' && parts[0] === 'scribe') ? 'on' : '');
   return (
@@ -47,6 +50,7 @@ export function App() {
           <nav className="main">
             <a className={on('')} href="#/">Explore</a>
             <a className={on('create')} href="#/create">Inscribe</a>
+            <a className={on('bounties') || on('bounty')} href="#/bounties">Bounties</a>
             <a className={on('brief')} href="#/brief">Brief</a>
             <a className={on('me')} href="#/me">My scribes</a>
           </nav>

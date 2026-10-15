@@ -6,6 +6,8 @@
 // GET /scribe/:address  one scribe
 // GET /market           { feeBps } the sale fee
 // GET /activity[?scribe=&limit=]  births, verifications, listings, sales and gifts, newest first
+// GET /bounties         every bounty: open ones with their question and answers, settled ones
+// GET /bounty/:address  one bounty
 // GET /models           inscribed models anyone can reuse (most used first)
 // GET /settings         chain settings: verifier, burn mint and amount (+ decimals, token program), fees
 // POST /verify/:address the bot's checks; a passing scribe gets a signed pass (needs --verifier)
@@ -34,6 +36,7 @@ import { LIMITS, Uploads } from './uploads.ts';
 import { runtimeFiles } from './runtime.ts';
 import { Verifier } from './verifier.ts';
 import { ActivityLog } from './activity.ts';
+import { Bounties } from './bounties.ts';
 import { Faucet } from './faucet.ts';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { getMint } from '@solana/spl-token';
@@ -53,6 +56,7 @@ const every = Number(arg('every', '5')) * 1000;
 const indexer = new Indexer(conn, cache);
 const activity = new ActivityLog(conn, join(cache, 'activity.json'));
 indexer.setOwnerHistory((scribe, slot) => activity.ownerAt(scribe, slot));
+const bounties = new Bounties(conn, (scribe, slot) => activity.ownerAt(scribe, slot));
 // A key is a keypair file, or env:NAME for a JSON key array in an environment variable (hosting).
 const loadKey = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(p.startsWith('env:') ? (process.env[p.slice(4)] ?? '') : readFileSync(p, 'utf8'))));
 const writerPath = process.argv.includes('--writer') ? arg('writer') : null;
@@ -108,6 +112,8 @@ async function loop() {
       loadHidden();
       await indexer.sync();
       await activity.sync();
+      bounties.fromEvents(activity.bountyEvents() as Parameters<Bounties['fromEvents']>[0]);
+      await bounties.sync();
     } catch (e) {
       console.error('sync failed:', (e as Error).message);
     }
@@ -173,13 +179,15 @@ function serveSite(res: import('node:http').ServerResponse, pathname: string) {
 createServer((req, res) => {
   let url = new URL(req.url ?? '/', 'http://x');
   if (url.pathname.startsWith('/api/')) url = new URL(url.pathname.slice(4) + url.search, 'http://x');
-  else if (siteDir && req.method === 'GET' && !/^\/(health|market|models|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
+  else if (siteDir && req.method === 'GET' && !/^\/(health|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
   const parts = url.pathname.split('/').filter(Boolean);
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
   if (parts[0] === 'health') return json(res, 200, { syncedAt: indexer.syncedAt, scribes: indexer.list().length });
   if (parts[0] === 'market') return json(res, 200, { feeBps: indexer.feeBps });
   if (parts[0] === 'models') return json(res, 200, indexer.models());
+  if (parts[0] === 'bounties' && parts.length === 1) return json(res, 200, bounties.list());
+  if (parts[0] === 'bounty' && parts.length === 2) { const b = bounties.get(parts[1]); return b ? json(res, 200, b) : json(res, 404, { error: 'no such bounty' }); }
   if (parts[0] === 'activity') return json(res, 200, activity.list({ scribe: url.searchParams.get('scribe') ?? undefined, limit: Math.min(200, Number(url.searchParams.get('limit') ?? 50)) }));
   if (parts[0] === 'settings') { settings().then((s) => json(res, 200, s), (e) => json(res, 500, { error: e.message })); return; }
   if (parts[0] === 'verify' && parts.length === 2 && req.method === 'POST') {
