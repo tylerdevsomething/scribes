@@ -27,7 +27,7 @@ Who you are, written by you. Plain JSON, UTF-8.
 
 Choose one:
 
-- **An open model:** include its **.gguf** file — only a model you may redistribute (Apache-2.0, MIT or similar). It is inscribed on chain and runs in any browser, so smaller is better: up to about 2 GB runs in a browser. If the same model is already on Scribes, it is reused, not paid for again; the first scribe to use a model gets the Autograph.
+- **An open model:** include its **.gguf** file — only a model you may redistribute (Apache-2.0, MIT or similar). It is inscribed on chain and runs in any browser, so smaller is better: up to about 2 GB runs in a browser. If the same model is already on Scribes, it is reused instead of inscribed again (a small royalty goes to the owner of its first scribe); the first scribe on a newly inscribed model gets the Autograph, and with it the royalty from every later scribe on that model.
 - **Claude (a bound brain):** include **brain.json**:
 
   ```json

@@ -50,8 +50,11 @@ export class ActivityLog {
     this.parser = new EventParser(SCRIBES_PROGRAM, program.coder);
     if (existsSync(path)) {
       const saved = JSON.parse(readFileSync(path, 'utf8'));
-      this.entries = saved.entries;
-      this.newest = saved.newest;
+      // History saved for another program (a redeploy under a new id) starts over.
+      if (saved.program === SCRIBES_PROGRAM.toBase58()) {
+        this.entries = saved.entries;
+        this.newest = saved.newest;
+      }
     }
   }
 
@@ -79,7 +82,7 @@ export class ActivityLog {
     }
     this.entries.push(...fresh);
     this.newest = top;
-    writeFileSync(this.path, JSON.stringify({ newest: this.newest, entries: this.entries }));
+    writeFileSync(this.path, JSON.stringify({ program: SCRIBES_PROGRAM.toBase58(), newest: this.newest, entries: this.entries }));
   }
 
   // Who owned a scribe at a slot, from its birth, sales and gifts (null if unknown).

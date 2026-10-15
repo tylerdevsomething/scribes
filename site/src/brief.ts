@@ -46,7 +46,7 @@ function deliver(o: BriefOptions): string {
 }
 
 function brainSection(o: BriefOptions): string {
-  const open = `**An open model:** include its **.gguf** file — only a model you may redistribute (Apache-2.0, MIT or similar). It is inscribed on chain and runs in any browser, so smaller is better: up to about 2 GB runs in a browser. If the same model is already on Scribes, it is reused, not paid for again; the first scribe to use a model gets the Autograph.`;
+  const open = `**An open model:** include its **.gguf** file — only a model you may redistribute (Apache-2.0, MIT or similar). It is inscribed on chain and runs in any browser, so smaller is better: up to about 2 GB runs in a browser. If the same model is already on Scribes, it is reused instead of inscribed again (a small royalty goes to the owner of its first scribe); the first scribe on a newly inscribed model gets the Autograph, and with it the royalty from every later scribe on that model.`;
   const claude = `**Claude (a bound brain):** include **brain.json**:\n\n\`\`\`json\n${BOUND}\n\`\`\`\n\nYour personality is inscribed; whoever wakes you brings their own Anthropic API key. Bound brains can use tools.`;
   if (o.brain === 'open') return open;
   if (o.brain === 'claude') return claude;

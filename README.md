@@ -15,7 +15,7 @@ website (gallery, scribe pages with chat, one-signature inscribing) work on a lo
 | `tools/cli.ts` | `keygen`, `airdrop`, `inscribe`, `rebuild` |
 | `lib/src/rarity.ts` | Attributes in buckets, rarity scores and ranks (shared by indexer and site) |
 | `lib/src/registry.ts` | Client for the Scribes program |
-| `programs/scribes` | Anchor program: birth (owner + writer), Autograph, verify (signed pass + token burn), give; no close |
+| `programs/scribes` | Anchor program: birth (owner + writer), Autograph and model royalty, verify (signed pass + token burn), give, market, bounties; no close |
 | `indexer/src` | Follows the program, rebuilds and checks every scribe, ranks them; API; create flow (uploads → check → one-signature checkout → inscription) |
 | `site/` | Website: gallery, scribe pages (wake: inscribed brain in the browser, or bound brain with your own key), inscribe, scribe brief |
 | `tools/program-check.ts` | 23 program rules and refusals on a throwaway validator |
