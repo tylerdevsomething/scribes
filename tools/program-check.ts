@@ -264,11 +264,49 @@ async function main() {
     assert.ok((await program.account.scribe.fetch(s1)).owner.equals(dave));
   });
 
+  // ---- bounties ----
+  const { postBountyInstructions, awardInstruction, refundInstruction, bountyAddress } = await import('../lib/src/bounty.ts');
+  const post = async (poster: Keypair, id: bigint, sol: number, hours: number) => {
+    const { ixs } = await postBountyInstructions(program, { poster: poster.publicKey, id, rewardLamports: sol * LAMPORTS_PER_SOL, hours, question: 'What is the best lighthouse?' });
+    return sendAndConfirmTransaction(conn, new Transaction().add(...ixs), [poster], { commitment: 'confirmed' });
+  };
+  const poster = await funded(5);
+  const scribeOwner = (await program.account.scribe.fetch(s1)).owner; // dave, from the gift above
+  await refuses('a bounty below 0.01 SOL', () => post(poster, 1n, 0.001, 2), /BountyTooSmall/);
+  await refuses('a bounty shorter than an hour', () => post(poster, 1n, 0.5, 0.5), /BadDeadline/);
+  await check('post a 0.5 SOL bounty: the reward moves into the bounty account', async () => {
+    await post(poster, 1n, 0.5, 2);
+    const b = await program.account.bounty.fetch(bountyAddress(poster.publicKey, 1n));
+    assert.equal(b.reward.toNumber(), LAMPORTS_PER_SOL / 2);
+    assert.ok((await conn.getBalance(bountyAddress(poster.publicKey, 1n))) > LAMPORTS_PER_SOL / 2);
+  });
+  const b1 = bountyAddress(poster.publicKey, 1n);
+  await refuses('a refund before the deadline', async () => sendAndConfirmTransaction(conn, new Transaction().add(await refundInstruction(program, poster.publicKey, b1)), [poster]), /BountyStillOpen/);
+  await refuses('an award by someone other than the poster', async () => {
+    const ix = await awardInstruction(program, stranger.publicKey, b1, s1, scribeOwner);
+    return sendAndConfirmTransaction(conn, new Transaction().add(ix), [stranger]);
+  }, /NotPoster|ConstraintSeeds|seeds/);
+  await refuses("an award paid to someone other than the scribe's owner", async () => {
+    const ix = await awardInstruction(program, poster.publicKey, b1, s1, stranger.publicKey);
+    return sendAndConfirmTransaction(conn, new Transaction().add(ix), [poster]);
+  }, /NotOwner/);
+  await check("award: the scribe's owner gets the reward minus 2.5%, the fee goes to the receiver, the rent back to the poster", async () => {
+    const [ownerBefore, feeBefore, posterBefore] = [await conn.getBalance(scribeOwner), await conn.getBalance(feeReceiver), await conn.getBalance(poster.publicKey)];
+    const rent = (await conn.getBalance(b1)) - LAMPORTS_PER_SOL / 2;
+    await sendAndConfirmTransaction(conn, new Transaction().add(await awardInstruction(program, poster.publicKey, b1, s1, scribeOwner)), [poster], { commitment: 'confirmed' });
+    assert.equal((await conn.getBalance(scribeOwner)) - ownerBefore, LAMPORTS_PER_SOL / 2 * 0.975);
+    assert.equal((await conn.getBalance(feeReceiver)) - feeBefore, LAMPORTS_PER_SOL / 2 * 0.025);
+    const back = (await conn.getBalance(poster.publicKey)) - posterBefore; // the rent, less this transaction's fee
+    assert.ok(back > rent - 20_000 && back <= rent, `poster got ${back}, rent was ${rent}`);
+    assert.equal(await conn.getAccountInfo(b1), null);
+  });
+  await refuses('awarding the same bounty twice', async () => sendAndConfirmTransaction(conn, new Transaction().add(await awardInstruction(program, poster.publicKey, b1, s1, scribeOwner)), [poster]), /AccountNotInitialized|not exist|could not find/i);
+
   await check('no instruction closes a scribe (only listings close)', async () => {
     const names = idl.instructions.map((i: { name: string }) => i.name).sort();
-    assert.deepEqual(names, ['birth', 'buy', 'cancel', 'give', 'initialize', 'list', 'set_market', 'set_settings', 'verify']);
+    assert.deepEqual(names, ['award_bounty', 'birth', 'buy', 'cancel', 'give', 'initialize', 'list', 'post_bounty', 'refund_bounty', 'set_market', 'set_settings', 'verify']);
     for (const i of idl.instructions as { name: string; accounts: { name: string }[] }[]) {
-      if (i.name === 'buy' || i.name === 'cancel') continue;
+      if (['buy', 'cancel', 'award_bounty', 'refund_bounty'].includes(i.name)) continue; // listings and bounties close, never scribes
       assert.ok(!JSON.stringify(i).includes('"close"'), `${i.name} must not close anything`);
     }
   });

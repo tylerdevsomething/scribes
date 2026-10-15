@@ -3,7 +3,7 @@
 // A scribe's files live in transaction data (see lib/src/chain.ts); this program records who owns each
 // scribe, its birth number, whether it was the first scribe to use its model (the Autograph), and
 // whether it was verified, and its sale listings. Nothing closes a scribe: once born, it exists for
-// ever. (A listing is a separate small account; it is closed when it is cancelled or bought.)
+// ever. (Listings and bounties are separate small accounts; they close when they are settled.)
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{ed25519_program, sysvar::instructions as ix_sysvar};
 use anchor_lang::system_program::{self, Allocate, Assign, CreateAccount, Transfer};
@@ -166,7 +166,55 @@ pub mod scribes {
         emit!(Sold { scribe: s.key(), from, to: s.owner, price, fee });
         Ok(())
     }
+
+    /// Posts a bounty: the reward moves into the bounty account until the poster awards it to a scribe
+    /// or takes it back after the deadline. The question itself is inscribed separately; its sha256 is
+    /// recorded here so the question cannot change after people answer it.
+    pub fn post_bounty(ctx: Context<PostBounty>, id: u64, reward: u64, duration_slots: u64, question_sha: [u8; 32]) -> Result<()> {
+        require!(reward >= MIN_BOUNTY, ScribeError::BountyTooSmall);
+        require!((MIN_BOUNTY_SLOTS..=MAX_BOUNTY_SLOTS).contains(&duration_slots), ScribeError::BadDeadline);
+        system_program::transfer(
+            CpiContext::new(ctx.accounts.system_program.to_account_info(), Transfer { from: ctx.accounts.poster.to_account_info(), to: ctx.accounts.bounty.to_account_info() }),
+            reward,
+        )?;
+        let deadline = Clock::get()?.slot.checked_add(duration_slots).ok_or(ScribeError::Overflow)?;
+        let b = &mut ctx.accounts.bounty;
+        b.poster = ctx.accounts.poster.key();
+        b.id = id;
+        b.reward = reward;
+        b.deadline_slot = deadline;
+        b.question_sha = question_sha;
+        b.bump = ctx.bumps.bounty;
+        emit!(BountyPosted { bounty: b.key(), poster: b.poster, reward, deadline_slot: deadline, question_sha });
+        Ok(())
+    }
+
+    /// Awards a bounty to a scribe: its current owner receives the reward minus the market fee. The
+    /// bounty account closes and its rent goes back to the poster.
+    pub fn award_bounty(ctx: Context<AwardBounty>) -> Result<()> {
+        let reward = ctx.accounts.bounty.reward;
+        let fee = (reward as u128 * ctx.accounts.market.fee_bps as u128 / 10_000) as u64;
+        ctx.accounts.bounty.sub_lamports(reward)?;
+        ctx.accounts.owner.add_lamports(reward - fee)?;
+        ctx.accounts.fee_receiver.add_lamports(fee)?;
+        emit!(BountyAwarded {
+            bounty: ctx.accounts.bounty.key(), scribe: ctx.accounts.scribe.key(), owner: ctx.accounts.owner.key(), reward, fee,
+        });
+        Ok(())
+    }
+
+    /// Takes an unawarded bounty back after its deadline.
+    pub fn refund_bounty(ctx: Context<RefundBounty>) -> Result<()> {
+        require!(Clock::get()?.slot > ctx.accounts.bounty.deadline_slot, ScribeError::BountyStillOpen);
+        emit!(BountyRefunded { bounty: ctx.accounts.bounty.key(), reward: ctx.accounts.bounty.reward });
+        Ok(()) // closing the account returns the reward and the rent to the poster
+    }
 }
+
+/// Smallest bounty: 0.01 SOL. Shortest: about an hour; longest: about 30 days (400 ms slots).
+pub const MIN_BOUNTY: u64 = 10_000_000;
+pub const MIN_BOUNTY_SLOTS: u64 = 9_000;
+pub const MAX_BOUNTY_SLOTS: u64 = 6_480_000;
 
 fn pay<'a>(sys: &AccountInfo<'a>, from: &AccountInfo<'a>, to: AccountInfo<'a>, amount: u64) -> Result<()> {
     if amount == 0 {
@@ -437,6 +485,79 @@ pub struct Buy<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[account]
+#[derive(InitSpace)]
+pub struct Bounty {
+    pub poster: Pubkey,
+    pub id: u64,
+    pub reward: u64,
+    pub deadline_slot: u64,
+    pub question_sha: [u8; 32],
+    pub bump: u8,
+}
+
+#[derive(Accounts)]
+#[instruction(id: u64)]
+pub struct PostBounty<'info> {
+    #[account(mut)]
+    pub poster: Signer<'info>,
+    #[account(init, payer = poster, space = 8 + Bounty::INIT_SPACE, seeds = [b"bounty", poster.key().as_ref(), &id.to_le_bytes()], bump)]
+    pub bounty: Account<'info, Bounty>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AwardBounty<'info> {
+    #[account(mut)]
+    pub poster: Signer<'info>,
+    #[account(mut, close = poster, has_one = poster @ ScribeError::NotPoster, seeds = [b"bounty", poster.key().as_ref(), &bounty.id.to_le_bytes()], bump = bounty.bump)]
+    pub bounty: Account<'info, Bounty>,
+    #[account(seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    pub scribe: Account<'info, Scribe>,
+    /// CHECK: the scribe's current owner, who is paid (checked against the scribe).
+    #[account(mut, address = scribe.owner @ ScribeError::NotOwner)]
+    pub owner: UncheckedAccount<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(seeds = [b"market"], bump = market.bump)]
+    pub market: Account<'info, Market>,
+    /// CHECK: must be the configured fee receiver.
+    #[account(mut, address = config.fee_receiver @ ScribeError::WrongFeeReceiver)]
+    pub fee_receiver: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct RefundBounty<'info> {
+    #[account(mut)]
+    pub poster: Signer<'info>,
+    #[account(mut, close = poster, has_one = poster @ ScribeError::NotPoster, seeds = [b"bounty", poster.key().as_ref(), &bounty.id.to_le_bytes()], bump = bounty.bump)]
+    pub bounty: Account<'info, Bounty>,
+}
+
+#[event]
+pub struct BountyPosted {
+    pub bounty: Pubkey,
+    pub poster: Pubkey,
+    pub reward: u64,
+    pub deadline_slot: u64,
+    pub question_sha: [u8; 32],
+}
+
+#[event]
+pub struct BountyAwarded {
+    pub bounty: Pubkey,
+    pub scribe: Pubkey,
+    pub owner: Pubkey,
+    pub reward: u64,
+    pub fee: u64,
+}
+
+#[event]
+pub struct BountyRefunded {
+    pub bounty: Pubkey,
+    pub reward: u64,
+}
+
 #[event]
 pub struct Listed {
     pub scribe: Pubkey,
@@ -515,4 +636,12 @@ pub enum ScribeError {
     StaleListing,
     #[msg("The price is higher than you agreed to pay")]
     PriceChanged,
+    #[msg("A bounty is at least 0.01 SOL")]
+    BountyTooSmall,
+    #[msg("A bounty runs from about an hour to about 30 days")]
+    BadDeadline,
+    #[msg("Only the poster can do this")]
+    NotPoster,
+    #[msg("The bounty is still open: it can be refunded after its deadline")]
+    BountyStillOpen,
 }

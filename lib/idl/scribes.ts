@@ -8,6 +8,129 @@ export type Scribes = {
   },
   "instructions": [
     {
+      "name": "awardBounty",
+      "docs": [
+        "Awards a bounty to a scribe: its current owner receives the reward minus the market fee. The",
+        "bounty account closes and its rent goes back to the poster."
+      ],
+      "discriminator": [
+        24,
+        150,
+        101,
+        41,
+        109,
+        41,
+        64,
+        114
+      ],
+      "accounts": [
+        {
+          "name": "poster",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bounty"
+          ]
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "poster"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.id",
+                "account": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "scribe",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  114,
+                  105,
+                  98,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe.manifest_sha",
+                "account": "scribe"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "feeReceiver",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "birth",
       "docs": [
         "Registers a scribe. Signed by its owner (who pays) and by the writer of its manifest, so nobody",
@@ -527,6 +650,140 @@ export type Scribes = {
       ]
     },
     {
+      "name": "postBounty",
+      "docs": [
+        "Posts a bounty: the reward moves into the bounty account until the poster awards it to a scribe",
+        "or takes it back after the deadline. The question itself is inscribed separately; its sha256 is",
+        "recorded here so the question cannot change after people answer it."
+      ],
+      "discriminator": [
+        40,
+        217,
+        222,
+        103,
+        151,
+        83,
+        147,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "poster",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "poster"
+              },
+              {
+                "kind": "arg",
+                "path": "id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u64"
+        },
+        {
+          "name": "reward",
+          "type": "u64"
+        },
+        {
+          "name": "durationSlots",
+          "type": "u64"
+        },
+        {
+          "name": "questionSha",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "refundBounty",
+      "docs": [
+        "Takes an unawarded bounty back after its deadline."
+      ],
+      "discriminator": [
+        167,
+        234,
+        121,
+        108,
+        247,
+        216,
+        216,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "poster",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bounty"
+          ]
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "poster"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.id",
+                "account": "bounty"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "setMarket",
       "docs": [
         "Sets the marketplace sale fee (basis points of the price, paid to the fee receiver). Admin only."
@@ -740,6 +997,19 @@ export type Scribes = {
   ],
   "accounts": [
     {
+      "name": "bounty",
+      "discriminator": [
+        237,
+        16,
+        105,
+        198,
+        19,
+        69,
+        242,
+        234
+      ]
+    },
+    {
       "name": "config",
       "discriminator": [
         155,
@@ -804,6 +1074,45 @@ export type Scribes = {
         186,
         167,
         29
+      ]
+    },
+    {
+      "name": "bountyAwarded",
+      "discriminator": [
+        230,
+        101,
+        91,
+        225,
+        16,
+        230,
+        193,
+        102
+      ]
+    },
+    {
+      "name": "bountyPosted",
+      "discriminator": [
+        61,
+        61,
+        26,
+        239,
+        184,
+        44,
+        139,
+        232
+      ]
+    },
+    {
+      "name": "bountyRefunded",
+      "discriminator": [
+        158,
+        18,
+        109,
+        41,
+        239,
+        13,
+        79,
+        43
       ]
     },
     {
@@ -957,6 +1266,26 @@ export type Scribes = {
       "code": 6016,
       "name": "priceChanged",
       "msg": "The price is higher than you agreed to pay"
+    },
+    {
+      "code": 6017,
+      "name": "bountyTooSmall",
+      "msg": "A bounty is at least 0.01 SOL"
+    },
+    {
+      "code": 6018,
+      "name": "badDeadline",
+      "msg": "A bounty runs from about an hour to about 30 days"
+    },
+    {
+      "code": 6019,
+      "name": "notPoster",
+      "msg": "Only the poster can do this"
+    },
+    {
+      "code": 6020,
+      "name": "bountyStillOpen",
+      "msg": "The bounty is still open: it can be refunded after its deadline"
     }
   ],
   "types": [
@@ -1013,6 +1342,120 @@ export type Scribes = {
           {
             "name": "autograph",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bounty",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "poster",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "reward",
+            "type": "u64"
+          },
+          {
+            "name": "deadlineSlot",
+            "type": "u64"
+          },
+          {
+            "name": "questionSha",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bountyAwarded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "scribe",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "reward",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bountyPosted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "poster",
+            "type": "pubkey"
+          },
+          {
+            "name": "reward",
+            "type": "u64"
+          },
+          {
+            "name": "deadlineSlot",
+            "type": "u64"
+          },
+          {
+            "name": "questionSha",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "bountyRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "reward",
+            "type": "u64"
           }
         ]
       }
