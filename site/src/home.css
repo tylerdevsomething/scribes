@@ -164,7 +164,8 @@ footer.site .foot { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 28px
 .profile { position: relative; }
 .profile::before {
   content: ""; position: absolute; top: 0; height: 460px; left: calc(50% - 50vw); right: calc(50% - 50vw); z-index: -1; pointer-events: none;
-  background: radial-gradient(60% 100% at 20% 0, var(--tint, transparent), transparent 75%), linear-gradient(180deg, var(--tint, transparent), transparent);
+  background: radial-gradient(45% 90% at 22% 0, color-mix(in srgb, var(--tint-ink, transparent) 16%, transparent), transparent 75%),
+              linear-gradient(180deg, color-mix(in srgb, var(--tint-ink, transparent) 7%, var(--tint, transparent)), transparent);
 }
 .profile .portrait { box-shadow: 0 20px 50px rgba(28, 26, 22, .14), 0 0 0 6px var(--sheet); }
 .profile h1 { font-size: clamp(34px, 4.4vw, 50px); letter-spacing: -.02em; }
