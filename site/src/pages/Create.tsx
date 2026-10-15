@@ -11,12 +11,13 @@ type Parts = Partial<Record<Part, File>>;
 
 const size = (n: number) => (n < 1e6 ? `${(n / 1e3).toFixed(1)} KB` : `${(n / 1e6).toFixed(1)} MB`);
 const CLAUDE_MODELS = [
-  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 — most capable' },
-  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 — fast and capable' },
-  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 — quickest, cheapest' },
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 — most capable', short: 'Opus 5.5', hint: 'Most capable' },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 — fast and capable', short: 'Sonnet 5.5', hint: 'Fast and capable' },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 — quickest, cheapest', short: 'Haiku 5.5', hint: 'Quickest' },
 ];
 
-interface ModelInfo { sha256: string; size: number; fileName: string; name: string | null; parameters: number; scribes: number }
+import type { ModelInfo } from './Models.tsx';
+import { useSettings } from '../settings.ts';
 
 export function Create({ model }: { model?: string } = {}) {
   const [mode, setMode] = useState<'write' | 'upload'>('write');
@@ -81,6 +82,14 @@ export function Create({ model }: { model?: string } = {}) {
 
 // ---- write a scribe in the browser ----
 
+const params = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)}M`);
+// A plain-words idea of what a model of this size is good for.
+function modelHint(n: number): string {
+  if (n < 50e6) return 'Tiny: a toy for testing, short odd stories.';
+  if (n < 400e6) return 'Small and quick: short chats and stories.';
+  return 'The best on-chain brain so far: follows instructions, holds a conversation.';
+}
+
 function Builder({ model, busy, onCheck }: { model?: string; busy: boolean; onCheck: (p: Parts) => void }) {
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -132,6 +141,7 @@ function Builder({ model, busy, onCheck }: { model?: string; busy: boolean; onCh
   }
 
   const chosen = models?.find((m) => m.sha256 === modelSha);
+  const royalty = (useSettings() as { modelRoyalty?: number } | null)?.modelRoyalty;
   return (
     <div className="builder">
       <div className="form">
@@ -151,24 +161,39 @@ function Builder({ model, busy, onCheck }: { model?: string; busy: boolean; onCh
           <textarea rows={2} placeholder="The storm of 1987." value={memory} onChange={(e) => setMemory(e.target.value)} />
         </label>
 
-        <div className="field"><span>Brain</span>
-          <div className="choices">
-            <label className={brain === 'existing' ? 'on' : ''}><input type="radio" checked={brain === 'existing'} onChange={() => setBrain('existing')} disabled={!models?.length} />
-              <b>A model already on Scribes</b><small>Inscribed, runs in any browser. Reused, so almost free.</small></label>
-            <label className={brain === 'claude' ? 'on' : ''}><input type="radio" checked={brain === 'claude'} onChange={() => setBrain('claude')} />
-              <b>Claude</b><small>Bound brain: smartest, uses tools. Whoever wakes it brings their own API key.</small></label>
-            <label className={brain === 'own' ? 'on' : ''}><input type="radio" checked={brain === 'own'} onChange={() => setBrain('own')} />
-              <b>Upload my own model</b><small>An open .gguf you may redistribute. First to use it gets the Autograph.</small></label>
+        <div className="field"><span>Brain <em>what it thinks with</em></span>
+          <div className="brains">
+            {models === null && <div className="brain-card skeleton" />}
+            {models?.map((m) => (
+              <button type="button" key={m.sha256} className={`brain-card chain${brain === 'existing' && modelSha === m.sha256 ? ' on' : ''}`} onClick={() => { setBrain('existing'); setModelSha(m.sha256); }}>
+                <span className="brain-seal"><Sigil seed={m.firstScribe} letter={(m.name ?? m.fileName)[0].toUpperCase()} /></span>
+                <span className="brain-tag">On-chain model</span>
+                <b>{m.name ?? m.fileName}</b>
+                <span className="brain-size">{params(m.parameters)} parameters · {size(m.size)}</span>
+                <span className="brain-hint">{modelHint(m.parameters)}</span>
+                <span className="brain-meta">Already on Solana · used by {m.scribes}{royalty ? ` · ${sol(royalty)} SOL royalty` : ''}</span>
+              </button>
+            ))}
+            <button type="button" className={`brain-card claude${brain === 'claude' ? ' on' : ''}`} onClick={() => setBrain('claude')}>
+              <span className="brain-seal glyph-claude">✳</span>
+              <span className="brain-tag">Bound brain</span>
+              <b>Claude</b>
+              <span className="brain-size">Smartest · uses tools</span>
+              <span className="brain-hint">Only the choice of model is inscribed. Visitors talk free each day, or with their own key.</span>
+            </button>
+            <button type="button" className={`brain-card own${brain === 'own' ? ' on' : ''}`} onClick={() => setBrain('own')}>
+              <span className="brain-seal glyph-own">+</span>
+              <span className="brain-tag">New model</span>
+              <b>Upload my own</b>
+              <span className="brain-size">An open .gguf you may share</span>
+              <span className="brain-hint">Written to Solana byte by byte (about 0.005 SOL per MB). The first scribe on it holds its Autograph.</span>
+            </button>
           </div>
-          {brain === 'existing' && (models?.length
-            ? <select value={modelSha} onChange={(e) => setModelSha(e.target.value)} style={{ marginTop: 10, width: '100%' }}>
-                {models.map((m) => <option key={m.sha256} value={m.sha256}>{m.name ?? m.fileName} · {(m.parameters / 1e6).toFixed(m.parameters < 1e7 ? 1 : 0)}M · used by {m.scribes}</option>)}
-              </select>
-            : <p className="muted" style={{ fontSize: 13.5 }}>No inscribed models yet.</p>)}
+          {models?.length === 0 && <p className="muted" style={{ fontSize: 13.5 }}>No models are inscribed yet; be the first.</p>}
           {brain === 'claude' && (
-            <select value={claude} onChange={(e) => setClaude(e.target.value)} style={{ marginTop: 10, width: '100%' }}>
-              {CLAUDE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
+            <div className="seg claude-pick">
+              {CLAUDE_MODELS.map((m) => <button type="button" key={m.id} className={claude === m.id ? 'on' : ''} onClick={() => setClaude(m.id)}><b>{m.short}</b> <span>{m.hint}</span></button>)}
+            </div>
           )}
           {brain === 'own' && <input type="file" accept=".gguf" style={{ marginTop: 10 }} onChange={(e) => setOwn(e.target.files?.[0] ?? null)} />}
         </div>
