@@ -17,6 +17,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "@coral-xyz/anchor": "^0.31.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@solana/spl-token": "^0.4.13",
     "@solana/web3.js": "^1.98.4",
     "@wllama/wllama": "^3.8.1",

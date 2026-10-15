@@ -43,6 +43,7 @@ import { Bounties } from './bounties.ts';
 import { Mainnet } from './mainnet.ts';
 import { HostedBrain } from './brain.ts';
 import { Faucet } from './faucet.ts';
+import { cardPng, sharePage } from './card.ts';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { getMint } from '@solana/spl-token';
 import { readSettings, scribesProgram } from '../../lib/src/registry.ts';
@@ -197,7 +198,7 @@ function serveSite(res: import('node:http').ServerResponse, pathname: string) {
 createServer((req, res) => {
   let url = new URL(req.url ?? '/', 'http://x');
   if (url.pathname.startsWith('/api/')) url = new URL(url.pathname.slice(4) + url.search, 'http://x');
-  else if (siteDir && req.method === 'GET' && !/^\/(health|brain|mainnet|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
+  else if (siteDir && req.method === 'GET' && !/^\/(health|brain|mainnet|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet|card|s)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
   const parts = url.pathname.split('/').filter(Boolean);
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
@@ -209,6 +210,21 @@ createServer((req, res) => {
   if (parts[0] === 'mainnet') {
     if (!mainnet) return json(res, 404, { error: 'no mainnet RPC configured (--mainnet-rpc or RPC_MAINNET)' });
     mainnet.handle(req, res, parts, url, () => jsonBody(req), json);
+    return;
+  }
+  // Share links and their preview cards.
+  if ((parts[0] === 's' || parts[0] === 'card') && parts.length === 2) {
+    const s = indexer.get(parts[1].replace(/\.png$/, ''));
+    if (!s || s.hidden) return json(res, 404, { error: 'no such scribe' });
+    if (parts[0] === 's') {
+      const base = `${String(req.headers['x-forwarded-proto'] ?? 'http').split(',')[0]}://${req.headers.host}`;
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' });
+      res.end(sharePage(s, base));
+      return;
+    }
+    const total = indexer.list().filter((x) => x.rarity).length;
+    res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'public, max-age=600', ...CORS });
+    res.end(cardPng(indexer, s, total));
     return;
   }
   if (parts[0] === 'health') return json(res, 200, { syncedAt: indexer.syncedAt, scribes: indexer.list().length });

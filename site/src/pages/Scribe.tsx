@@ -161,7 +161,7 @@ function History({ s }: { s: ScribeView }) {
 
 function Share({ s }: { s: ScribeView }) {
   const [copied, setCopied] = useState('');
-  const url = location.href;
+  const url = `${location.origin}/s/${s.address}`; // shows a preview card when posted
   const copy = (what: string, text: string) => navigator.clipboard.writeText(text).then(() => { setCopied(what); setTimeout(() => setCopied(''), 1500); });
   const text = encodeURIComponent(`${s.name}, scribe #${s.birthNumber + 1}: an agent inscribed on Solana.`);
   return (
@@ -345,7 +345,14 @@ function Chat({ brain: given, personality, s }: { brain: Brain; personality: Per
   const [limited, setLimited] = useState(false);
   const [key, setKey] = useState(() => { try { return localStorage.getItem(KEY_STORE) ?? ''; } catch { return ''; } });
   const brain = own ?? given;
-  const [history, setHistory] = useState<Turn[]>([]);
+  // The conversation is kept in this browser, per scribe, so a refresh does not lose it.
+  const store = `scribes.chat.${s.address}`;
+  const [history, setHistory] = useState<Turn[]>(() => {
+    try { return JSON.parse(localStorage.getItem(store) ?? '[]'); } catch { return []; }
+  });
+  useEffect(() => {
+    try { if (history.length) localStorage.setItem(store, JSON.stringify(history.slice(-40))); else localStorage.removeItem(store); } catch { /* storage unavailable */ }
+  }, [history, store]);
   const [pending, setPending] = useState<string | null>(null);
   const [working, setWorking] = useState<string[]>([]); // tools used for the reply in progress
   const [input, setInput] = useState('');
@@ -390,6 +397,7 @@ function Chat({ brain: given, personality, s }: { brain: Brain; personality: Per
 
   return (
     <div className="chat">
+      {history.length > 0 && pending === null && <button className="link" style={{ float: 'right', fontSize: 13 }} onClick={() => { setHistory([]); setProposals([]); setError(''); }}>New conversation</button>}
       <div className="label">{brain.label}{brain.hosted && left !== null ? ` · ${left} free message${left === 1 ? '' : 's'} left today` : ''}</div>
       {(tools.length > 0 || declared.length > 0) && (
         <div className="badges" style={{ marginBottom: 12 }}>
