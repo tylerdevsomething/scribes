@@ -7,7 +7,7 @@
 //   node tools/cli.ts rebuild  --link <scribes:v1:...> --rpc <url> [--out .cache/files]
 //   node tools/cli.ts init     --key <upgrade authority.json> --rpc <url> [--verifier <pk>] [--fee-receiver <pk>] [--fee <lamports>]
 //   node tools/cli.ts market   --key <admin.json> --rpc <url> --fee-bps 250
-//   node tools/cli.ts test-token --key <admin.json> --rpc <url> [--burn 10] [--verifier <pk>] [--to <pk> --amount 100]   (not mainnet)
+//   node tools/cli.ts test-token --key <admin.json> --rpc <url> [--burn 10] [--verifier <pk>] [--mint-authority <pk>] [--to <pk> --amount 100]   (not mainnet)
 //   (inscribe registers the scribe with the program at the end; --no-birth skips that)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -188,7 +188,7 @@ async function main() {
     let mint: PublicKey;
     if (current.burnMint) mint = new PublicKey(current.burnMint);
     else {
-      mint = await createMint(conn, key, key.publicKey, null, 6, undefined, { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
+      mint = await createMint(conn, key, new PublicKey(a['mint-authority'] ?? key.publicKey.toBase58()), null, 6, undefined, { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID); // --mint-authority: e.g. the hosted faucet's key
       console.log(`test token mint ${mint.toBase58()}`);
     }
     const burn = BigInt(a.burn ?? '10') * 1_000_000n;

@@ -13,6 +13,7 @@ export class Faucet {
   constructor(conn: Connection, authority: Keypair) { this.conn = conn; this.authority = authority; }
 
   async drip(owner: PublicKey): Promise<{ sol: number; tokens: string }> {
+    if ((await this.conn.getGenesisHash()) === '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d') throw new Error('no test faucet on mainnet');
     const k = owner.toBase58();
     if (Date.now() - (last.get(k) ?? 0) < 30_000) throw new Error('one drip every 30 seconds');
     last.set(k, Date.now());
