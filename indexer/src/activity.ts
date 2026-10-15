@@ -76,6 +76,18 @@ export class ActivityLog {
     writeFileSync(this.path, JSON.stringify({ newest: this.newest, entries: this.entries }));
   }
 
+  // Who owned a scribe at a slot, from its birth, sales and gifts (null if unknown).
+  ownerAt(scribe: string, slot: number): string | null {
+    let owner: string | null = null;
+    for (const e of this.entries) {
+      if (e.slot > slot) break;
+      if (e.scribe !== scribe) continue;
+      if (e.kind === 'born') owner = e.owner;
+      else if (e.kind === 'sold' || e.kind === 'given') owner = e.to;
+    }
+    return owner;
+  }
+
   // Newest first.
   list(opts: { scribe?: string; limit?: number } = {}): Entry[] {
     const out: Entry[] = [];

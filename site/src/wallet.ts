@@ -1,14 +1,14 @@
 // Browser wallets (Phantom, Solflare, Backpack) through their injected providers, with a tiny shared
 // store so every page knows who is connected.
 import { useEffect, useState } from 'react';
-import { PublicKey, Transaction, type TransactionInstruction } from '@solana/web3.js';
+import { PublicKey, Transaction, VersionedTransaction, type TransactionInstruction } from '@solana/web3.js';
 import { conn } from './config.ts';
 
 interface Injected {
   publicKey?: { toBase58(): string } | null;
   connect(): Promise<{ publicKey: { toBase58(): string } } | void>;
   disconnect?(): Promise<void>;
-  signTransaction(tx: Transaction): Promise<Transaction>;
+  signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T>;
 }
 
 type W = Window & { phantom?: { solana?: Injected }; solflare?: Injected; backpack?: Injected };
@@ -50,6 +50,12 @@ export function useWallet(): string | null {
 }
 
 export async function signTransaction(tx: Transaction): Promise<Transaction> {
+  if (!current) throw new Error('connect a wallet first');
+  return current.signTransaction(tx);
+}
+
+// Signs a transaction someone else built (e.g. a Jupiter swap); the caller sends it.
+export async function signVersioned(tx: VersionedTransaction): Promise<VersionedTransaction> {
   if (!current) throw new Error('connect a wallet first');
   return current.signTransaction(tx);
 }

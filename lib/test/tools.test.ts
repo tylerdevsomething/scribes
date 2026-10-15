@@ -12,7 +12,8 @@ test('the calculator does arithmetic and nothing else', () => {
 });
 
 test('declared tools map to the official set; anything else stays declared only', () => {
-  assert.deepEqual(enabledTools(['Calculator', 'web search', 'wallet', 'teleport']), ['calculator', 'read_wallet', 'web_search']);
+  assert.deepEqual(enabledTools(['Calculator', 'web search', 'wallet', 'teleport']), ['calculator', 'web_search', 'wallet_portfolio']);
+  assert.deepEqual(enabledTools(['read_wallet', 'Swap (Jupiter)', 'remember']), ['wallet_portfolio', 'journal', 'propose_swap']);
   assert.deepEqual(enabledTools(['propose_transfer']), ['propose_transfer']);
   assert.deepEqual(enabledTools(undefined), []);
 });

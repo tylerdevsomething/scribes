@@ -52,6 +52,7 @@ const port = Number(arg('port', '8790'));
 const every = Number(arg('every', '5')) * 1000;
 const indexer = new Indexer(conn, cache);
 const activity = new ActivityLog(conn, join(cache, 'activity.json'));
+indexer.setOwnerHistory((scribe, slot) => activity.ownerAt(scribe, slot));
 // A key is a keypair file, or env:NAME for a JSON key array in an environment variable (hosting).
 const loadKey = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(p.startsWith('env:') ? (process.env[p.slice(4)] ?? '') : readFileSync(p, 'utf8'))));
 const writerPath = process.argv.includes('--writer') ? arg('writer') : null;

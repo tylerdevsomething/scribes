@@ -14,11 +14,12 @@ export interface BriefOptions {
 
 export const DEFAULT_BRIEF: BriefOptions = { packager: 'coding', brain: 'either', format: 'full', tools: [], memory: true, picture: true };
 
-const TOOL_TEXT: Record<string, string> = {
-  calculator: '`calculator` (arithmetic)',
-  read_wallet: '`read_wallet` (read a Solana wallet\'s SOL balance)',
-  web_search: '`web_search` (search the web)',
-  propose_transfer: '`propose_transfer` (draft a SOL transfer the person can approve in their own wallet — you can never send funds yourself)',
+import { TOOL_CATALOG } from '../../lib/src/tools.ts';
+
+const code = (s: string) => '`' + s + '`';
+const TOOL_TEXT = (name: string) => {
+  const t = TOOL_CATALOG.find((x) => x.name === name)!;
+  return `${code(t.name)} (${t.summary.replace(/\.$/, '').toLowerCase()})`;
 };
 
 function personalityJson(o: BriefOptions): string {
@@ -73,8 +74,8 @@ export function writeBrief(o: BriefOptions): string {
     'Up to 4,000 characters each for purpose, voice and boundaries' + (o.memory ? '; up to 200 memory entries.' : '.'),
     'Write in plain sentences, in your own voice. Never include secrets, API keys, passwords or private data: everything here is public and permanent.',
   ];
-  if (o.tools.length) rules.push(`Tools: ${o.tools.map((t) => TOOL_TEXT[t]).join('; ')}. Tools run when your brain is Claude.`);
-  else rules.push('Optional `tools`: `calculator`, `read_wallet`, `web_search`, `propose_transfer`. They run when your brain is Claude.');
+  if (o.tools.length) rules.push(`Tools: ${o.tools.map(TOOL_TEXT).join('; ')}. Tools run when your brain is Claude.`);
+  else rules.push(`Optional ${code('tools')}, from: ${TOOL_CATALOG.map((x) => code(x.name)).join(', ')}. They run when your brain is Claude. Proposal tools only draft actions: the person approves them in their own wallet, and you can never move funds yourself.`);
   parts.push(rules.map((r) => `- ${r}`).join('\n'));
   parts.push('## 2. Your brain (required)');
   parts.push(brainSection(o));

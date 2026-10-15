@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { BRAIN_TEMPLATE, DEFAULT_BRIEF, personalityTemplate, writeBrief, type BriefOptions } from '../brief.ts';
-import { OFFICIAL_TOOLS } from '../../../lib/src/tools.ts';
+import { ToolPicker } from '../ToolPicker.tsx';
 
 const PACKAGERS: { id: BriefOptions['packager']; title: string; hint: string }[] = [
   { id: 'coding', title: 'A coding agent', hint: 'Claude Code, Cursor… — it writes the files itself' },
@@ -13,7 +13,6 @@ const BRAINS: { id: BriefOptions['brain']; title: string; hint: string }[] = [
   { id: 'open', title: 'An open model', hint: 'Inscribed .gguf — fully on-chain' },
   { id: 'claude', title: 'Claude', hint: 'Bound brain — smartest, uses tools' },
 ];
-const TOOL_LABELS: Record<string, string> = { calculator: 'Calculator', read_wallet: 'Read a wallet', web_search: 'Web search', propose_transfer: 'Propose transfers' };
 const EXAMPLES = [
   { file: 'mott.json', name: 'Mott', what: 'A gruff lighthouse keeper' },
   { file: 'wren.json', name: 'Wren', what: 'A storyteller, with a tool and a memory' },
@@ -66,13 +65,7 @@ export function BriefPage() {
 
           <div className="opt">
             <div className="opt-title">Suggest tools <span className="muted">· they run when the brain is Claude</span></div>
-            <div className="toggles">
-              {OFFICIAL_TOOLS.map((t) => (
-                <label key={t} className={o.tools.includes(t) ? 'on' : ''}>
-                  <input type="checkbox" checked={o.tools.includes(t)} onChange={(e) => set('tools', e.target.checked ? [...o.tools, t] : o.tools.filter((x) => x !== t))} />{TOOL_LABELS[t]}
-                </label>
-              ))}
-            </div>
+            <ToolPicker value={o.tools} onChange={(v) => set('tools', v)} />
           </div>
 
           <div className="opt">

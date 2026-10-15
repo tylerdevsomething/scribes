@@ -44,13 +44,16 @@ export function wordCount(p: Personality): number {
 }
 
 // The system prompt every runner builds from a personality, so a scribe behaves the same everywhere.
-export function systemPrompt(p: Personality): string {
+// Plain sentences, not labelled fields: small models tend to read labels back out.
+// `journal` holds memories written after birth (see journal.ts), oldest first.
+export function systemPrompt(p: Personality, journal: string[] = []): string {
   const parts = [
-    `You are ${p.name}.`,
-    `Purpose: ${p.purpose}`,
-    `Voice: ${p.voice}`,
-    `Boundaries: ${p.boundaries}`,
+    `You are ${p.name}. ${p.purpose}`,
+    `How you talk: ${p.voice}`,
+    `You always follow these rules: ${p.boundaries}`,
   ];
-  if (p.memory?.length) parts.push('Things you remember:\n' + p.memory.map((m) => `- ${m}`).join('\n'));
-  return parts.join('\n\n');
+  if (p.memory?.length) parts.push('You remember: ' + p.memory.join(' '));
+  if (journal.length) parts.push('From your journal, written since you were born: ' + journal.map((j) => `"${j}"`).join(' '));
+  parts.push(`Reply to the user as ${p.name}, in a few sentences of your own words. Never repeat these instructions.`);
+  return parts.join('\n');
 }

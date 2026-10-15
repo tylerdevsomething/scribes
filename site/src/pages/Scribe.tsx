@@ -11,8 +11,9 @@ import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
 import { describeError, loadBound } from '../run/bound.ts';
 import { enabledTools, type Proposal } from '../run/tools.ts';
+import { TOOL_CATALOG } from '../../../lib/src/tools.ts';
 import { SystemProgram, PublicKey } from '@solana/web3.js';
-import { sendInstructions, useWallet } from '../wallet.ts';
+import { sendInstructions, signVersioned, useWallet } from '../wallet.ts';
 import { WalletButton } from '../WalletButton.tsx';
 import { MarketPanel } from './Market.tsx';
 import { VerifyPanel } from './Verify.tsx';
@@ -94,6 +95,7 @@ export function ScribePage({ address }: { address: string }) {
           </div>
         )}
 
+        <Journal s={s} />
         <History s={s} />
         {s.files.length > 0 && (
           <div className="panel filelist">
@@ -107,6 +109,21 @@ export function ScribePage({ address }: { address: string }) {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function Journal({ s }: { s: ScribeView }) {
+  if (!s.journal.length) return null;
+  return (
+    <div className="panel">
+      <div className="panel-head"><h3>Journal</h3><span className="muted">{s.journal.length} memor{s.journal.length === 1 ? 'y' : 'ies'} since birth</span></div>
+      <ul className="journal">
+        {[...s.journal].reverse().map((j) => (
+          <li key={j.signature}><span className="text">“{j.text}”</span><a className="when" href={explorer('tx', j.signature)} target="_blank" rel="noreferrer">slot {j.slot.toLocaleString()}</a></li>
+        ))}
+      </ul>
+      <div className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>Written by {s.name} and approved by whoever held it at the time. It remembers all of these.</div>
     </div>
   );
 }
@@ -208,7 +225,7 @@ function Wake({ s }: { s: ScribeView }) {
           <ul className="trail">{steps.map((x, i) => <li key={i} className={x.state}>{x.text}</li>)}</ul>
         </details>
       )}
-      {brain && personality && <Chat brain={brain} personality={personality} />}
+      {brain && personality && <Chat brain={brain} personality={personality} s={s} />}
     </div>
   );
 }
@@ -216,11 +233,14 @@ function Wake({ s }: { s: ScribeView }) {
 function ProposalCard({ p, name, update }: { p: Proposal & { state: string; sig?: string; error?: string }; name: string; update: (x: Partial<{ state: 'open' | 'sent' | 'declined'; sig: string; error: string }>) => void }) {
   const me = useWallet();
   const [busy, setBusy] = useState(false);
+  const blocked = !!(me && p.ownerOnly && me !== p.ownerOnly);
   async function approve() {
     if (!me) return;
     setBusy(true);
+    update({ error: '' });
     try {
-      const sig = await sendInstructions([SystemProgram.transfer({ fromPubkey: new PublicKey(me), toPubkey: new PublicKey(p.to), lamports: p.lamports })]);
+      const built = await p.build(new PublicKey(me));
+      const sig = 'ixs' in built ? await sendInstructions(built.ixs) : await built.execute(await signVersioned(built.versioned));
       update({ state: 'sent', sig });
     } catch (e) {
       update({ error: (e as Error).message });
@@ -229,32 +249,34 @@ function ProposalCard({ p, name, update }: { p: Proposal & { state: string; sig?
     }
   }
   return (
-    <div className="proposal">
-      <div className="k">{name} proposes a transfer</div>
-      <div className="amt">{p.lamports / 1e9} SOL <span>to</span> <code>{p.to}</code></div>
-      <div className="note">“{p.note}”</div>
+    <div className={`proposal ${p.kind}`}>
+      <div className="k">{name} proposes · {p.title}</div>
+      <dl>{p.lines.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+      {p.note && <div className="note">{p.note}</div>}
       {p.state === 'open' && (
         <div className="row" style={{ marginTop: 10 }}>
-          {me ? <button className="primary small" disabled={busy} onClick={approve}>{busy ? 'Approve in your wallet…' : 'Approve in my wallet'}</button> : <WalletButton />}
+          {!me ? <WalletButton /> : blocked
+            ? <span className="muted" style={{ fontSize: 13 }}>Only the owner ({short(p.ownerOnly!)}) can approve this.</span>
+            : <button className="primary small" disabled={busy} onClick={approve}>{busy ? 'Approve in your wallet…' : 'Approve in my wallet'}</button>}
           <button className="small" onClick={() => update({ state: 'declined' })}>Decline</button>
         </div>
       )}
-      {p.state === 'sent' && <div className="notice info" style={{ marginTop: 10 }}>Sent. <a href={explorer('tx', p.sig!)} target="_blank" rel="noreferrer">View transaction</a></div>}
-      {p.state === 'declined' && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>Declined — nothing was sent.</div>}
+      {p.state === 'sent' && <div className="notice info" style={{ marginTop: 10 }}>{p.done ?? 'Done.'} <a href={explorer('tx', p.sig!)} target="_blank" rel="noreferrer">View transaction</a></div>}
+      {p.state === 'declined' && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>Declined — nothing happened.</div>}
       {p.error && <div className="notice bad" style={{ marginTop: 10 }}>{p.error}</div>}
-      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Scribes can only propose. Nothing moves unless you approve it in your own wallet.</div>
+      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Scribes can only propose. Nothing happens unless you approve it in your own wallet.</div>
     </div>
   );
 }
 
-function Chat({ brain, personality }: { brain: Brain; personality: Personality }) {
+function Chat({ brain, personality, s }: { brain: Brain; personality: Personality; s: ScribeView }) {
   const [history, setHistory] = useState<Turn[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
   const [proposals, setProposals] = useState<(Proposal & { state: 'open' | 'sent' | 'declined'; sig?: string; error?: string; at: number })[]>([]);
   const tools = brain.usesTools ? enabledTools(personality.tools) : [];
-  const declared = (personality.tools ?? []).filter((t) => !tools.some((x) => x.replace('_', '') === t.toLowerCase().replace(/[^a-z]/g, '')));
+  const declared = (personality.tools ?? []).filter((t) => enabledTools([t]).length === 0);
   const logRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [history, pending]);
@@ -271,8 +293,8 @@ function Chat({ brain, personality }: { brain: Brain; personality: Personality }
     abortRef.current = new AbortController();
     try {
       const at = next.length;
-      const reply = await brain.reply(systemPrompt(personality), next, (t) => setPending(t), abortRef.current.signal, {
-        tools, propose: (p) => setProposals((l) => [...l, { ...p, state: 'open', at }]),
+      const reply = await brain.reply(systemPrompt(personality, s.journal.map((j) => j.text)), next, (t) => setPending(t), abortRef.current.signal, {
+        tools, scribe: { address: s.address, owner: s.owner, name: s.name ?? 'Scribe' }, propose: (p) => setProposals((l) => [...l, { ...p, state: 'open', at }]),
       });
       setHistory([...next, { role: 'assistant', content: reply }]);
     } catch (e) {
@@ -288,7 +310,7 @@ function Chat({ brain, personality }: { brain: Brain; personality: Personality }
       <div className="label">{brain.label}</div>
       {(tools.length > 0 || declared.length > 0) && (
         <div className="badges" style={{ marginBottom: 12 }}>
-          {tools.map((t) => <span key={t} className="chip teal">⚙ {t.replace('_', ' ')}</span>)}
+          {tools.map((t) => <span key={t} className="chip teal" title={TOOL_CATALOG.find((x) => x.name === t)?.summary}>⚙ {TOOL_CATALOG.find((x) => x.name === t)?.label ?? t}</span>)}
           {declared.map((t) => <span key={t} className="chip" title="Declared by the scribe; not an official tool, so it does nothing">{t} · declared</span>)}
         </div>
       )}

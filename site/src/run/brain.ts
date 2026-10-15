@@ -3,7 +3,8 @@ export interface Turn { role: 'user' | 'assistant'; content: string }
 
 export interface ReplyContext {
   tools: string[]; // official tools this scribe may use
-  propose: (p: import('./tools.ts').Proposal) => void; // a drafted transfer for the viewer to approve
+  scribe: { address: string; owner: string; name: string };
+  propose: (p: import('./tools.ts').Proposal) => void; // a drafted action for the viewer to approve
 }
 
 export interface Brain {

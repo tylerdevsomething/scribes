@@ -43,7 +43,7 @@ export function loadBound(provider: string, model: string, apiKey: string): Brai
         for (const b of final.content) {
           if (b.type !== 'tool_use') continue;
           try {
-            results.push({ type: 'tool_result', tool_use_id: b.id, content: await runTool(b.name, b.input, ctx?.propose ?? (() => {})) });
+            results.push({ type: 'tool_result', tool_use_id: b.id, content: await runTool(b.name, b.input, { scribe: ctx!.scribe, propose: ctx!.propose, client }) });
           } catch (e) {
             results.push({ type: 'tool_result', tool_use_id: b.id, content: `Error: ${(e as Error).message}`, is_error: true });
           }

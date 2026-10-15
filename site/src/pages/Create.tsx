@@ -4,13 +4,12 @@ import { checkUpload, checkout, newUpload, putPart, submitted, uploadStatus, typ
 import { API, conn, explorer, sol } from '../config.ts';
 import { connect, signTransaction, useWallet, wallets } from '../wallet.ts';
 import { Sigil } from '../Sigil.tsx';
-import { OFFICIAL_TOOLS } from '../../../lib/src/tools.ts';
+import { ToolPicker } from '../ToolPicker.tsx';
 
 type Part = 'personality' | 'model' | 'model-ref' | 'brain' | 'picture';
 type Parts = Partial<Record<Part, File>>;
 
 const size = (n: number) => (n < 1e6 ? `${(n / 1e3).toFixed(1)} KB` : `${(n / 1e6).toFixed(1)} MB`);
-const TOOL_LABELS: Record<string, string> = { calculator: 'Calculator', read_wallet: 'Read a wallet', web_search: 'Web search', propose_transfer: 'Propose transfers' };
 const CLAUDE_MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 — most capable' },
   { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 — fast and capable' },
@@ -169,13 +168,7 @@ function Builder({ busy, onCheck }: { busy: boolean; onCheck: (p: Parts) => void
         </div>
 
         <div className="field"><span>Tools <em>{brain === 'claude' ? 'what it can use' : 'used when the brain is Claude'}</em></span>
-          <div className="toggles">
-            {OFFICIAL_TOOLS.map((t) => (
-              <label key={t} className={tools.includes(t) ? 'on' : ''}>
-                <input type="checkbox" checked={tools.includes(t)} onChange={(e) => setTools(e.target.checked ? [...tools, t] : tools.filter((x) => x !== t))} />{TOOL_LABELS[t]}
-              </label>
-            ))}
-          </div>
+          <ToolPicker value={tools} onChange={setTools} />
         </div>
 
         <label className="field"><span>Picture <em>optional · re-encoded to a small WebP</em></span>

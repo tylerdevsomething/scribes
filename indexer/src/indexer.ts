@@ -9,6 +9,9 @@ import { decodeManifest, formatLink, type Manifest } from '../../lib/src/manifes
 import { parsePersonality, wordCount, type Personality } from '../../lib/src/personality.ts';
 import { readGguf, type GgufInfo } from '../../lib/src/gguf.ts';
 import { rankAll, type Ranked, type ScribeFacts } from '../../lib/src/rarity.ts';
+import { decodeJournal, journalTag } from '../../lib/src/journal.ts';
+import { INK_PROGRAM } from '../../lib/src/chain.ts';
+import { PublicKey } from '@solana/web3.js';
 import { allListings, allScribes, marketFeeBps, scribesProgram, ZERO_SHA, type ListingRecord, type ScribeRecord } from '../../lib/src/registry.ts';
 
 export type Status =
@@ -27,7 +30,10 @@ export interface ScribeView extends ScribeRecord {
   rarity: Ranked | null;
   hidden: boolean;
   listing: { price: number; seller: string } | null; // only a live listing (its seller still owns the scribe)
+  journal: JournalEntry[]; // entries signed by whoever owned the scribe at the time, oldest first
 }
+
+export interface JournalEntry { text: string; slot: number; signature: string; signer: string }
 
 interface Entry {
   record: ScribeRecord;
@@ -51,6 +57,8 @@ export class Indexer {
   private ranks = new Map<string, Ranked>();
   private hidden = new Set<string>();
   private listings = new Map<string, ListingRecord>();
+  private journals = new Map<string, { newest?: string; raw: JournalEntry[] }>();
+  private ownerAt: ((scribe: string, slot: number) => string | null) | null = null;
   feeBps: number | null = null;
   private conn: Connection;
   private cacheDir: string;
@@ -63,6 +71,7 @@ export class Indexer {
   }
 
   setHidden(list: string[]) { this.hidden = new Set(list); }
+  setOwnerHistory(f: (scribe: string, slot: number) => string | null) { this.ownerAt = f; }
 
   private collector(ref: { sha256: string; size: number; writer: string }): FileCollector {
     const key = `${ref.writer}:${ref.sha256}`;
@@ -107,8 +116,39 @@ export class Indexer {
         e.invalid = (err as Error).message;
       }
     }
+    for (const e of this.entries.values()) {
+      if (e.invalid) continue;
+      try { await this.syncJournal(e.record.address); } catch { /* try again next pass */ }
+    }
     this.rank();
     this.syncedAt = Date.now();
+  }
+
+  // New journal entries for one scribe (only transactions newer than the last pass are read).
+  private async syncJournal(address: string): Promise<void> {
+    const j = this.journals.get(address) ?? { raw: [] };
+    this.journals.set(address, j);
+    const tag = await journalTag(new PublicKey(address));
+    const sigs = await this.conn.getSignaturesForAddress(tag, { until: j.newest, limit: 1000 }, 'confirmed');
+    if (!sigs.length) return;
+    for (const s of [...sigs].reverse()) {
+      if (s.err) continue;
+      const tx = await this.conn.getTransaction(s.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+      if (!tx || tx.meta?.err) continue;
+      const keys = tx.transaction.message.staticAccountKeys;
+      for (const ix of tx.transaction.message.compiledInstructions) {
+        if (!keys[ix.programIdIndex]?.equals(INK_PROGRAM) || !ix.accountKeyIndexes.some((k) => keys[k]?.equals(tag))) continue;
+        const text = decodeJournal(ix.data);
+        if (text) j.raw.push({ text, slot: s.slot, signature: s.signature, signer: keys[0].toBase58() });
+      }
+    }
+    j.newest = sigs[0].signature;
+  }
+
+  private journal(r: ScribeRecord): JournalEntry[] {
+    const raw = this.journals.get(r.address)?.raw ?? [];
+    // Only whoever held the scribe when the entry was written can teach it.
+    return raw.filter((x) => x.signer === (this.ownerAt ? this.ownerAt(r.address, x.slot) : r.owner));
   }
 
   private async advance(e: Entry): Promise<void> {
@@ -184,6 +224,7 @@ export class Indexer {
       rarity: this.ranks.get(r.address) ?? null,
       hidden: this.hidden.has(r.address),
       listing: this.liveListing(r),
+      journal: this.journal(r),
     };
   }
 
