@@ -42,6 +42,15 @@ function loadKey(path: string): Keypair {
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(6);
 
+// Chunks a file still needs, going by its journal (the fee check should not charge for what is already written).
+async function chunksLeft(conn: Connection, key: Keypair, bytes: Uint8Array): Promise<number> {
+  const path = `.cache/journal/${(await conn.getGenesisHash()).slice(0, 12)}/${key.publicKey.toBase58()}-${await sha256Hex(bytes)}.json`;
+  const total = chunkCount(bytes.length);
+  if (!existsSync(path)) return total;
+  const j = JSON.parse(readFileSync(path, 'utf8'));
+  return j.complete ? 0 : total - j.done.length;
+}
+
 async function inscribeOne(conn: Connection, key: Keypair, role: Role, name: string, bytes: Uint8Array, a: Record<string, string>): Promise<FileRef> {
   const sha = await sha256Hex(bytes);
   const ref: FileRef = { role, name, size: bytes.length, sha256: sha, writer: key.publicKey.toBase58() };
@@ -122,11 +131,12 @@ async function main() {
       brain = { kind: 'bound', provider, model: rest.join(':') };
     }
 
-    const chunks = parts.reduce((n, p) => n + chunkCount(p.bytes.length), 0) + 1;
+    let chunks = 1;
+    for (const p of parts) chunks += await chunksLeft(conn, key, p.bytes);
     const before = await conn.getBalance(key.publicKey);
     const fee = 5000 + Math.ceil((Number(a.price ?? 0) * 10_000) / 1e6);
     console.log(`writer ${key.publicKey.toBase58()} · balance ${sol(before)} SOL`);
-    console.log(`about ${chunks} transactions · about ${sol(chunks * fee)} SOL in fees`);
+    console.log(`about ${chunks} transactions left · about ${sol(chunks * fee)} SOL in fees`);
     if (before < chunks * fee) throw new Error('not enough SOL for the fees');
 
     const files: FileRef[] = [];
