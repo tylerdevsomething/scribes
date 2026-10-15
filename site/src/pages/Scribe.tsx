@@ -376,7 +376,7 @@ function Chat({ brain: given, personality, s, first }: { brain: Brain; personali
   const [error, setError] = useState('');
   const [proposals, setProposals] = useState<(Proposal & { state: 'open' | 'sent' | 'declined'; sig?: string; error?: string; at: number })[]>([]);
   const tools = brain.usesTools ? enabledTools(personality.tools) : [];
-  const declared = (personality.tools ?? []).filter((t) => enabledTools([t]).length === 0);
+  const declared = (personality.tools ?? []).filter((t) => enabledTools([t]).length === 0 && !/bount|^answer$/i.test(t));
   const logRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [history, pending]);

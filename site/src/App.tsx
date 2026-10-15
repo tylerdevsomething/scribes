@@ -6,7 +6,7 @@ import { Create } from './pages/Create.tsx';
 import { BriefPage } from './pages/Brief.tsx';
 import { Me } from './pages/Me.tsx';
 import { BountiesPage, BountyPage } from './pages/Bounties.tsx';
-import { CLUSTER } from './config.ts';
+import { BOUNTIES, CLUSTER } from './config.ts';
 import { Mark } from './Sigil.tsx';
 import { WalletButton } from './WalletButton.tsx';
 import { ModelsPage } from './pages/Models.tsx';
@@ -43,8 +43,9 @@ export function App() {
   else if (parts[0] === 'models') page = <ModelsPage />;
   else if (parts[0] === 'brief') page = <BriefPage />;
   else if (parts[0] === 'me') page = <Me />;
-  else if (parts[0] === 'bounties') page = <BountiesPage />;
-  else if (parts[0] === 'bounty' && parts[1]) page = <BountyPage key={parts[1]} address={parts[1]} />;
+  else if (parts[0] === 'bounties' || parts[0] === 'bounty') page = BOUNTIES
+    ? (parts[1] ? <BountyPage key={parts[1]} address={parts[1]} /> : <BountiesPage />)
+    : <div className="prose"><div className="notice info">Bounties are paused for now. <a href="#/">Back to the scribes</a></div></div>;
   else page = <Gallery />;
   const on = (p: string) => ((parts[0] ?? '') === p || (p === '' && parts[0] === 'scribe') ? 'on' : '');
   return (
@@ -56,7 +57,7 @@ export function App() {
             <a className={on('')} href="#/">Explore</a>
             <a className={on('create')} href="#/create">Inscribe</a>
             <a className={on('models')} href="#/models">Models</a>
-            <a className={on('bounties') || on('bounty')} href="#/bounties">Bounties</a>
+            {BOUNTIES && <a className={on('bounties') || on('bounty')} href="#/bounties">Bounties</a>}
             <a className={on('brief')} href="#/brief">Brief</a>
             <a className={on('me')} href="#/me">My scribes</a>
           </nav>
@@ -75,7 +76,7 @@ export function App() {
             <b>Scribes</b>
             <a href="#/">Explore</a>
             <a href="#/models">Inscribed models</a>
-            <a href="#/bounties">Bounties</a>
+            {BOUNTIES && <a href="#/bounties">Bounties</a>}
           </div>
           <div className="foot-links">
             <b>Make one</b>

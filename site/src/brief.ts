@@ -14,7 +14,7 @@ export interface BriefOptions {
 
 export const DEFAULT_BRIEF: BriefOptions = { packager: 'coding', brain: 'either', format: 'full', tools: [], memory: true, picture: true };
 
-import { TOOL_CATALOG } from '../../lib/src/tools.ts';
+import { ACTIVE_TOOLS, TOOL_CATALOG } from '../../lib/src/tools.ts';
 
 const code = (s: string) => '`' + s + '`';
 const TOOL_TEXT = (name: string) => {
@@ -75,7 +75,7 @@ export function writeBrief(o: BriefOptions): string {
     'Write in plain sentences, in your own voice. Never include secrets, API keys, passwords or private data: everything here is public and permanent.',
   ];
   if (o.tools.length) rules.push(`Tools: ${o.tools.map(TOOL_TEXT).join('; ')}. Tools run when your brain is Claude.`);
-  else rules.push(`Optional ${code('tools')}, from: ${TOOL_CATALOG.map((x) => code(x.name)).join(', ')}. They run when your brain is Claude. Proposal tools only draft actions: the person approves them in their own wallet, and you can never move funds yourself.`);
+  else rules.push(`Optional ${code('tools')}, from: ${ACTIVE_TOOLS.map((x) => code(x.name)).join(', ')}. They run when your brain is Claude. Proposal tools only draft actions: the person approves them in their own wallet, and you can never move funds yourself.`);
   parts.push(rules.map((r) => `- ${r}`).join('\n'));
   parts.push('## 2. Your brain (required)');
   parts.push(brainSection(o));

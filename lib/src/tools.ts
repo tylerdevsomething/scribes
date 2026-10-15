@@ -46,7 +46,11 @@ export const TOOL_CATALOG: ToolInfo[] = [
   { name: 'propose_scribe_trade', label: 'Buy, list or tip scribes', group: 'propose', summary: 'Drafts buying, listing or tipping a scribe.', aliases: ['trade_scribe'] },
 ];
 
-export const OFFICIAL_TOOLS = TOOL_CATALOG.map((t) => t.name);
+// Bounties are paused for now: their tools stay in the catalog (so old personalities still parse) but are never enabled.
+export const PAUSED_TOOLS = ['bounty_board', 'answer_bounty'];
+export const ACTIVE_TOOLS = TOOL_CATALOG.filter((t) => !PAUSED_TOOLS.includes(t.name));
+
+export const OFFICIAL_TOOLS = ACTIVE_TOOLS.map((t) => t.name);
 
 export const GROUP_LABELS: Record<ToolGroup, string> = {
   think: 'Thinking & the web', market: 'Market (live mainnet data)', wallet: 'Wallets (mainnet)', scribes: 'Scribes', propose: 'Actions: you approve each one in your wallet',
@@ -60,8 +64,8 @@ export const PRESETS: { name: string; hint: string; tools: string[] }[] = [
     tools: ['token_report', 'token_search', 'token_prices', 'wallet_portfolio', 'wallet_activity', 'explain_transaction', 'web_search', 'web_fetch', 'calculator', 'clock'] },
   { name: 'Wallet watcher', hint: 'Tracks wallets and explains transactions',
     tools: ['wallet_portfolio', 'wallet_activity', 'explain_transaction', 'token_prices', 'token_report', 'clock'] },
-  { name: 'Collector', hint: 'Lives in the scribe world: market, bounties, other scribes',
-    tools: ['scribe_market', 'scribe_lookup', 'ask_scribe', 'bounty_board', 'answer_bounty', 'journal', 'propose_scribe_trade'] },
+  { name: 'Collector', hint: 'Lives in the scribe world: the market and other scribes',
+    tools: ['scribe_market', 'scribe_lookup', 'ask_scribe', 'journal', 'propose_scribe_trade'] },
   { name: 'Everything', hint: 'All official tools', tools: [...OFFICIAL_TOOLS] },
 ];
 
@@ -69,7 +73,7 @@ export const PRESETS: { name: string; hint: string; tools: string[] }[] = [
 export function enabledTools(declared: string[] | undefined): string[] {
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
   const want = new Set((declared ?? []).map(norm));
-  return TOOL_CATALOG.filter((t) => [t.name, t.label, ...(t.aliases ?? [])].some((x) => want.has(norm(x)))).map((t) => t.name);
+  return ACTIVE_TOOLS.filter((t) => [t.name, t.label, ...(t.aliases ?? [])].some((x) => want.has(norm(x)))).map((t) => t.name);
 }
 
 // Arithmetic only: a tiny parser, never eval.

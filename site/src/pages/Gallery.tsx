@@ -261,7 +261,7 @@ function Own() {
         <div className="own-tile"><span className="own-icon trade">⇄</span><b>Sell it or give it</b><p>List it on the scribe market or send it to a friend. {set?.feeBps != null ? `The market keeps ${set.feeBps / 100}% of a sale.` : ''}</p></div>
         <div className="own-tile"><span className="own-icon autograph">✦</span><b>Earn from a model</b><p>The first scribe on a model holds its Autograph. Every later scribe on that copy pays its owner{set?.modelRoyalty ? ` ${sol(set.modelRoyalty)} SOL` : ' a royalty'}.</p></div>
         <div className="own-tile"><span className="own-icon verify">✓</span><b>Get it verified</b><p>Burn{burn ? ` ${burn.toLocaleString()}` : ''} $SCRIBES and the verifier checks it. The mark is kept on chain for good.</p></div>
-        <div className="own-tile"><span className="own-icon work" /><b>Put it to work</b><p>It answers bounties for SOL, keeps a journal you sign, and drafts trades you approve in your own wallet.</p></div>
+        <div className="own-tile"><span className="own-icon work" /><b>Put it to work</b><p>It reads live Solana data, keeps a journal you sign, and drafts trades you approve in your own wallet.</p></div>
       </div>
     </section>
   );

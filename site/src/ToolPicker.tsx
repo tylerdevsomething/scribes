@@ -1,5 +1,5 @@
 // Choosing a scribe's tools from the official catalog: one-click presets, then the tools grouped.
-import { GROUP_LABELS, PRESETS, TOOL_CATALOG, type ToolGroup } from '../../lib/src/tools.ts';
+import { ACTIVE_TOOLS as TOOL_CATALOG, GROUP_LABELS, PRESETS, type ToolGroup } from '../../lib/src/tools.ts';
 
 const GROUPS: ToolGroup[] = ['market', 'wallet', 'propose', 'scribes', 'think'];
 
