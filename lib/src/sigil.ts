@@ -12,8 +12,8 @@ function rng(seed: string): () => number {
 }
 
 const GROUNDS = [
-  ['#dff1ea', '#0f6b58'], ['#f6e8d3', '#8a5a1c'], ['#ece8df', '#1c1a16'],
-  ['#e6eef4', '#24506e'], ['#f3e3e1', '#7d2f27'], ['#e9ecdc', '#4d5a1f'],
+  ['#06231d', '#3ee0b5'], ['#251707', '#f2b25c'], ['#121518', '#e6e3da'],
+  ['#0a1a2a', '#6cb8ff'], ['#260e0c', '#ff7a66'], ['#161d08', '#c4e05a'],
 ];
 
 export type Shape =

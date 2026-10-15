@@ -18,9 +18,9 @@ export function Sigil({ seed, letter }: { seed: string; letter: string }) {
 export function Mark({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <circle cx="16" cy="16" r="15" fill="#0f6b58" />
-      <circle cx="16" cy="16" r="11" fill="none" stroke="#dff1ea" strokeWidth="1.2" />
-      <path d="M11 20.5c1.2 1 2.8 1.5 4.6 1.5 2.6 0 4.4-1.3 4.4-3.3 0-4.3-8.4-2.4-8.4-6.4 0-1.7 1.6-2.8 3.9-2.8 1.5 0 2.8.4 3.8 1.2" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="16" cy="16" r="15" fill="#34e3b4" />
+      <circle cx="16" cy="16" r="11" fill="none" stroke="#03140f" strokeWidth="1.2" />
+      <path d="M11 20.5c1.2 1 2.8 1.5 4.6 1.5 2.6 0 4.4-1.3 4.4-3.3 0-4.3-8.4-2.4-8.4-6.4 0-1.7 1.6-2.8 3.9-2.8 1.5 0 2.8.4 3.8 1.2" fill="none" stroke="#03140f" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }

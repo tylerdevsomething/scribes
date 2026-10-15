@@ -1,0 +1,143 @@
+/* Scribes after dark: near-black ground, neon mint and amber, glass panels, glowing seals.
+   Loaded last, so it overrides the paper look in styles.css and home.css. */
+:root {
+  --paper: #06080a;
+  --sheet: rgba(18, 24, 26, .72);
+  --sheet-2: #10171a;
+  --solid: #0d1214;
+  --line: rgba(255, 255, 255, .07);
+  --line-strong: rgba(255, 255, 255, .14);
+  --ink: #eef2ee;
+  --ink-2: #b6c2be;
+  --muted: #7c8b87;
+  --teal: #34e3b4;
+  --teal-2: #7af3d2;
+  --teal-soft: rgba(52, 227, 180, .12);
+  --blue: #6cb8ff;
+  --tan: #f2b25c;
+  --tan-soft: rgba(242, 178, 92, .12);
+  --stone-soft: rgba(255, 255, 255, .06);
+  --gold: #f4c862;
+  --bad: #ff7a6b;
+  --bad-soft: rgba(255, 122, 107, .12);
+  --on-teal: #03140f;
+  --glow: 0 0 0 1px rgba(52, 227, 180, .35), 0 0 32px rgba(52, 227, 180, .18);
+  --shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 18px 50px rgba(0, 0, 0, .55);
+  color-scheme: dark;
+}
+
+/* the sky: two soft auroras and a field of faint stars, fixed behind everything */
+html { background: var(--paper); }
+body { background: transparent; } /* so the sky below can show through */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(60% 45% at 78% -5%, rgba(52, 227, 180, .16), transparent 70%),
+    radial-gradient(45% 40% at 5% 10%, rgba(108, 184, 255, .10), transparent 70%),
+    radial-gradient(50% 40% at 50% 110%, rgba(242, 178, 92, .07), transparent 70%);
+}
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .55;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 72% 32%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 38% 72%, #cfe, transparent), radial-gradient(1px 1px at 88% 82%, #fff, transparent),
+    radial-gradient(1px 1px at 55% 8%, #fff, transparent), radial-gradient(1.5px 1.5px at 22% 55%, #bdf, transparent),
+    radial-gradient(1px 1px at 93% 50%, #fff, transparent), radial-gradient(1px 1px at 6% 88%, #fff, transparent);
+  background-size: 420px 420px;
+  animation: twinkle 8s ease-in-out infinite alternate;
+}
+@keyframes twinkle { from { opacity: .35; } to { opacity: .7; } }
+@keyframes flow { to { background-position: 200% 0; } }
+@keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 1px rgba(52, 227, 180, .4), 0 0 40px rgba(52, 227, 180, .25); } 50% { box-shadow: 0 0 0 1px rgba(52, 227, 180, .6), 0 0 70px rgba(52, 227, 180, .4); } }
+@media (prefers-reduced-motion: reduce) { body::after, .steps5::before, .orrery .sun { animation: none !important; } }
+
+::selection { background: rgba(52, 227, 180, .35); color: #fff; }
+
+/* header: glass */
+header.top { background: rgba(6, 8, 10, .62); border-bottom-color: var(--line); }
+nav.main a.on { background: var(--teal-soft); color: var(--teal); box-shadow: inset 0 0 0 1px rgba(52, 227, 180, .35); }
+nav.main a:hover { background: rgba(255, 255, 255, .06); }
+.net { border-color: rgba(242, 178, 92, .35); }
+
+/* glass surfaces */
+.panel, .card, .featured, .own-tile, .faq details, .kind-card, .glyph, a.bounty, .ledger, .steps3 > div, .seg {
+  backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+.card:hover, .own-tile:hover, a.bounty:hover { border-color: rgba(52, 227, 180, .45); box-shadow: var(--glow), var(--shadow); }
+.seg button.on { background: rgba(255, 255, 255, .1); box-shadow: none; }
+input, textarea, select { background: rgba(0, 0, 0, .35); }
+
+/* buttons: neon */
+.btn.primary, button.primary { color: var(--on-teal); background: linear-gradient(135deg, #34e3b4, #2bc6e8); border-color: transparent; box-shadow: 0 0 24px rgba(52, 227, 180, .35); }
+.btn.primary:hover, button.primary:hover { color: var(--on-teal); background: linear-gradient(135deg, #7af3d2, #5fd6f2); border-color: transparent; box-shadow: 0 0 36px rgba(52, 227, 180, .55); }
+.btn:hover, button:hover { border-color: rgba(52, 227, 180, .5); }
+.btn.light { background: #fff; color: var(--on-teal); }
+
+/* things that sat light-on-dark, now the other way round */
+.capsule span:first-child { background: var(--teal); color: var(--on-teal); }
+.capsule span:last-child { background: var(--solid); }
+.capsule.teal span:first-child, .stepper div.on i, .stepper div.done i, .kind.chain { color: var(--on-teal); }
+.kind.chain { box-shadow: 0 0 14px rgba(52, 227, 180, .5); }
+.kind.claude { background: rgba(255, 255, 255, .9); color: #0b0f10; }
+.bubble.you { background: linear-gradient(135deg, #34e3b4, #2bc6e8); color: var(--on-teal); }
+.stepper div.on { background: var(--teal-soft); color: var(--teal); }
+.doc pre { background: #020304; color: #cfe; border: 1px solid var(--line); }
+.chip.gold, ul.feed li.born i, .own-icon.autograph { background: rgba(244, 200, 98, .14); color: var(--gold); }
+table.attrs tr.files td { color: #bff5e4; }
+.slot.filled, .panel.verified, .proposal.journal { border-color: rgba(52, 227, 180, .4); }
+.panel.verified { background: linear-gradient(180deg, rgba(52, 227, 180, .12), var(--sheet) 70%); }
+.proposal { border-color: rgba(242, 178, 92, .4); }
+.answer.won { border-color: rgba(244, 200, 98, .5); background: linear-gradient(180deg, rgba(244, 200, 98, .12), var(--sheet) 60%); }
+.tag-price { color: #1a1003; box-shadow: 0 0 16px rgba(242, 178, 92, .5); }
+.own-icon.trade { background: rgba(108, 184, 255, .14); color: var(--blue); }
+.own-icon.work { background: var(--teal-soft); }
+.own-icon.work::before { border-color: var(--teal); border-top-color: transparent; }
+footer.site { background: rgba(0, 0, 0, .35); border-top: 1px solid var(--line); }
+
+/* hero */
+.hero2::before { background: radial-gradient(45% 60% at 75% 45%, rgba(52, 227, 180, .14), transparent 70%); }
+.hero2::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: calc(50% - 50vw); right: calc(50% - 50vw); z-index: -1; pointer-events: none;
+  background-image: linear-gradient(rgba(255, 255, 255, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(60% 70% at 60% 40%, #000, transparent 75%); -webkit-mask-image: radial-gradient(60% 70% at 60% 40%, #000, transparent 75%);
+}
+.hero2 h1 { text-shadow: 0 0 40px rgba(52, 227, 180, .12); }
+.hero2 h1 em {
+  background: linear-gradient(100deg, #34e3b4, #6cb8ff 55%, #b48cff); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 22px rgba(52, 227, 180, .35)); padding-right: .08em;
+}
+.eyebrow { color: var(--teal); text-shadow: 0 0 12px rgba(52, 227, 180, .5); }
+.orrery { color: rgba(180, 255, 230, .55); }
+.orrery .sun { box-shadow: 0 0 0 6px var(--solid), 0 0 0 7px rgba(52, 227, 180, .5); animation: rise .5s ease both, pulse-glow 4s ease-in-out infinite; }
+.orrery .moon span { box-shadow: 0 0 0 2px rgba(52, 227, 180, .5), 0 0 18px rgba(52, 227, 180, .35); }
+.ask { background: rgba(255, 255, 255, .03); }
+.ask:hover { background: var(--teal-soft); border-color: rgba(52, 227, 180, .5); }
+
+/* the band */
+.band { background: linear-gradient(180deg, rgba(52, 227, 180, .06), rgba(108, 184, 255, .04)); border-top: 1px solid rgba(52, 227, 180, .25); border-bottom: 1px solid rgba(52, 227, 180, .25); }
+.band-stats b { background: linear-gradient(180deg, #fff, #9fe9d3); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.band-stats span, .tick { color: var(--muted); }
+
+/* how it works: a current runs along the line */
+.steps5::before {
+  border-top: 0; height: 2px; top: 35px;
+  background: linear-gradient(90deg, transparent, rgba(52, 227, 180, .9), transparent) 0 0 / 50% 100% repeat-x, rgba(255, 255, 255, .08);
+  animation: flow 3s linear infinite;
+}
+@media (max-width: 820px) { .steps5::before { width: 2px; height: auto; background: linear-gradient(180deg, rgba(52, 227, 180, .7), rgba(52, 227, 180, .1)); animation: none; } }
+.glyph { background: var(--solid); }
+.glyph.file::before { border-color: var(--ink); }
+.glyph.chain::before { color: var(--ink); }
+.glyph.check { border-color: rgba(52, 227, 180, .4); }
+.glyph.wake { background: linear-gradient(135deg, #34e3b4, #2bc6e8); box-shadow: 0 0 30px rgba(52, 227, 180, .5); }
+
+/* two kinds of brain */
+.kind-card.dark { background: radial-gradient(120% 120% at 0 0, rgba(52, 227, 180, .28), rgba(10, 40, 34, .7) 60%); border-color: rgba(52, 227, 180, .35); box-shadow: 0 0 60px rgba(52, 227, 180, .12); }
+.kind-card.dark .mini-row a { box-shadow: 0 0 0 3px #0b2a24; }
+.mini-row a { box-shadow: 0 0 0 3px var(--solid); }
+
+/* seals glow on the scribe page */
+.profile .portrait { box-shadow: 0 0 0 1px var(--line-strong), 0 0 60px color-mix(in srgb, var(--tint-ink, #34e3b4) 35%, transparent); }
+.wake-panel::before { box-shadow: 0 0 18px var(--tint-ink, var(--teal)); }
+.faq details[open] { border-color: rgba(52, 227, 180, .35); }

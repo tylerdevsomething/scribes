@@ -55,24 +55,24 @@ export function cardSvg(indexer: Indexer, s: ScribeView, total: number): string 
   let x = 610;
   const chipMarkup = chips.map((c) => {
     const w = c.length * 12.5 + 36;
-    const out = `<rect x="${x}" y="456" width="${w}" height="44" rx="22" fill="#dff1ea"/><text x="${x + w / 2}" y="485" text-anchor="middle" font-family="Inter" font-weight="600" font-size="21" fill="#0f6b58">${esc(c)}</text>`;
+    const out = `<rect x="${x}" y="456" width="${w}" height="44" rx="22" fill="#0f3129"/><text x="${x + w / 2}" y="485" text-anchor="middle" font-family="Inter" font-weight="600" font-size="21" fill="#34e3b4">${esc(c)}</text>`;
     x += w + 12;
     return out;
   }).join('');
-  const purpose = wrap(s.purpose ?? '', 40, 3).map((l, i) => `<text x="610" y="${292 + i * 38}" font-family="Inter" font-size="28" fill="#4a463e">${esc(l)}</text>`).join('');
+  const purpose = wrap(s.purpose ?? '', 40, 3).map((l, i) => `<text x="610" y="${292 + i * 38}" font-family="Inter" font-size="28" fill="#b4bfbb">${esc(l)}</text>`).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <rect width="1200" height="630" fill="#f4f1ea"/>
+  <rect width="1200" height="630" fill="#06080a"/>
   <clipPath id="art"><rect x="80" y="80" width="470" height="470" rx="28"/></clipPath>
   <g clip-path="url(#art)">${art}</g>
-  <rect x="80" y="80" width="470" height="470" rx="28" fill="none" stroke="#e2dccf" stroke-width="2"/>
-  <text x="610" y="140" font-family="Inter" font-weight="600" font-size="22" letter-spacing="3" fill="#0f6b58">SCRIBE #${s.birthNumber + 1}</text>
-  <text x="610" y="225" font-family="Fraunces" font-weight="600" font-size="${name.length > 14 ? 60 : 76}" fill="#1c1a16">${esc(name)}</text>
+  <rect x="80" y="80" width="470" height="470" rx="28" fill="none" stroke="#1f2c28" stroke-width="2"/>
+  <text x="610" y="140" font-family="Inter" font-weight="600" font-size="22" letter-spacing="3" fill="#34e3b4">SCRIBE #${s.birthNumber + 1}</text>
+  <text x="610" y="225" font-family="Fraunces" font-weight="600" font-size="${name.length > 14 ? 60 : 76}" fill="#f2efe8">${esc(name)}</text>
   ${purpose}
-  <text x="610" y="428" font-family="Inter" font-weight="600" font-size="24" fill="#1c1a16">${esc(brainText(s))}</text>
+  <text x="610" y="428" font-family="Inter" font-weight="600" font-size="24" fill="#f2efe8">${esc(brainText(s))}</text>
   ${chipMarkup}
-  <circle cx="1068" cy="560" r="14" fill="#0f6b58"/>
-  <text x="1090" y="568" font-family="Fraunces" font-weight="600" font-size="24" fill="#1c1a16">Scribes</text>
-  <text x="610" y="568" font-family="Inter" font-size="20" fill="#7a7466">Inscribed on Solana · talk to it in your browser</text>
+  <circle cx="1068" cy="560" r="14" fill="#34e3b4"/>
+  <text x="1090" y="568" font-family="Fraunces" font-weight="600" font-size="24" fill="#f2efe8">Scribes</text>
+  <text x="610" y="568" font-family="Inter" font-size="20" fill="#7f8c88">Inscribed on Solana · talk to it in your browser</text>
 </svg>`;
 }
 
