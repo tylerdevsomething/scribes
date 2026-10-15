@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fileUrl, getScribes, type ScribeView } from '../api.ts';
 import { Sigil } from '../Sigil.tsx';
-import { API, modelName, sol } from '../config.ts';
+import { API, CLUSTER, modelName, sol } from '../config.ts';
+import { useSettings, type Settings } from '../settings.ts';
 import { chunkCount } from '../../../lib/src/chunk.ts';
 import { ActivityList, namesOf, useActivity } from './Activity.tsx';
 import { hostedStatus } from '../run/bound.ts';
@@ -56,8 +57,8 @@ export function ScribeCard({ s }: { s: ScribeView }) {
   );
 }
 
-// First questions to put to a scribe from the home page (one click wakes it and asks).
-function questions(s: ScribeView): string[] {
+// First questions to put to a scribe (one click wakes it and asks).
+export function questions(s: ScribeView): string[] {
   if (onChain(s)) return /stor/i.test(s.purpose ?? '') ? ['Tell me a short story about a fox.', 'Who are you?'] : ['Who are you?', 'What do you know about Solana?'];
   return /trad|token|market/i.test(s.purpose ?? '') ? ["What's trending on Solana right now?", 'Is BONK safe? Quick report.'] : ['What can you do?', "What's new on Solana today?"];
 }
@@ -233,11 +234,59 @@ export function Gallery() {
       {list && shown.length === 0 && <div className="empty">{q ? `No scribe matches “${q}”.` : sort === 'sale' ? 'Nothing is for sale right now.' : <>No scribes yet. <a href="#/create">Inscribe the first one.</a></>}</div>}
       <div className="grid">{shown.map((s) => <ScribeCard key={s.address} s={s} />)}</div>
 
-      <section className="panel" style={{ marginBottom: 56 }}>
+      <Own />
+
+      <section className="panel" style={{ marginBottom: 72 }}>
         <div className="panel-head"><h3>Latest activity</h3><span className="muted">births · verifications · sales · gifts</span></div>
         <ActivityList rows={activity} names={namesOf(list)} />
       </section>
+
+      <Faq />
     </>
+  );
+}
+
+// What an owner can do with a scribe, with the live chain settings.
+function Own() {
+  const set = useSettings() as (Settings & { modelRoyalty?: number }) | null;
+  const burn = set?.token && set.burnMint ? Number(set.burnAmount) / 10 ** set.token.decimals : null;
+  return (
+    <section className="own">
+      <div className="section-head">
+        <div className="eyebrow">Owning one</div>
+        <h2>A scribe is yours, on Solana.</h2>
+        <p className="muted">The record of who owns it lives on chain, next to its files. Here is what an owner can do with it.</p>
+      </div>
+      <div className="own-grid">
+        <div className="own-tile"><span className="own-icon trade">⇄</span><b>Sell it or give it</b><p>List it on the scribe market or send it to a friend. {set?.feeBps != null ? `The market keeps ${set.feeBps / 100}% of a sale.` : ''}</p></div>
+        <div className="own-tile"><span className="own-icon autograph">✦</span><b>Earn from a model</b><p>The first scribe on a model holds its Autograph. Every later scribe on that copy pays its owner{set?.modelRoyalty ? ` ${sol(set.modelRoyalty)} SOL` : ' a royalty'}.</p></div>
+        <div className="own-tile"><span className="own-icon verify">✓</span><b>Get it verified</b><p>Burn{burn ? ` ${burn.toLocaleString()}` : ''} $SCRIBES and the verifier checks it. The mark is kept on chain for good.</p></div>
+        <div className="own-tile"><span className="own-icon work" /><b>Put it to work</b><p>It answers bounties for SOL, keeps a journal you sign, and drafts trades you approve in your own wallet.</p></div>
+      </div>
+    </section>
+  );
+}
+
+const FAQ: [string, string][] = [
+  ['Do I need a wallet to talk to a scribe?', 'No. Open any scribe and wake it. Claude scribes have free messages every day; on-chain brains run in your browser and cost nothing to talk to. A wallet is only needed to own, sell or verify one.'],
+  ['Where does an on-chain brain run?', 'On your own device. The page rebuilds the model from Solana (or a fast copy that must match the same hash), checks every file, and runs it in WebAssembly. Nothing you type is sent to a server.'],
+  ['Can a scribe be changed or deleted?', 'No. Its files are written into Solana transactions and its birth record names their hashes. The owner can sell it, give it away or add journal entries, but nobody can edit what it is.'],
+  ['What does it cost to inscribe one?', 'A Claude scribe is a few kilobytes: a handful of transactions and a small deposit for its record. An open model costs about 0.005 SOL per MB in fees. The Inscribe page shows the exact quote before you sign.'],
+  ['How do I make my own?', 'Give the scribe brief to any AI assistant and it will write the personality with you. Then upload it on the Inscribe page and sign once.'],
+];
+
+function Faq() {
+  return (
+    <section className="faq">
+      <div className="section-head">
+        <div className="eyebrow">Questions</div>
+        <h2>Good to know.</h2>
+        {CLUSTER !== 'mainnet' && <p className="muted">Scribes is running on Solana {CLUSTER} while it is tested, so nothing here costs real SOL yet.</p>}
+      </div>
+      <div className="faq-list">
+        {FAQ.map(([q, a], i) => <details key={q} open={i === 0}><summary>{q}</summary><p>{a}</p></details>)}
+      </div>
+    </section>
   );
 }
 

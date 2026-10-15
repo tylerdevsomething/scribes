@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { fileTag, readFile } from '../../../lib/src/chain.ts';
 import { chunkCount } from '../../../lib/src/chunk.ts';
 import { decodeUtf8, sha256Hex } from '../../../lib/src/bytes.ts';
@@ -8,7 +8,8 @@ import { parsePersonality, systemPrompt, type Personality } from '../../../lib/s
 import { ATTRIBUTES, type Attribute } from '../../../lib/src/rarity.ts';
 import { fileUrl, getScribe, type ScribeView } from '../api.ts';
 import { CLUSTER, conn, explorer, modelName, short } from '../config.ts';
-import { Badges, Capsule, Portrait, brainLine } from './Gallery.tsx';
+import { Badges, Capsule, Portrait, brainLine, questions } from './Gallery.tsx';
+import { sigil } from '../../../lib/src/sigil.ts';
 import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
 import { describeError, HostedError, hostedStatus, loadBound, loadHosted, type HostedStatus } from '../run/bound.ts';
@@ -44,7 +45,7 @@ export function ScribePage({ address, ask }: { address: string; ask?: string }) 
   if (s.hidden) return <div className="prose"><div className="notice info">This scribe is hidden from the site. It still exists on chain.</div></div>;
 
   return (
-    <div className="profile">
+    <div className="profile" style={{ '--tint': sigil(s.address).ground, '--tint-ink': sigil(s.address).ink } as CSSProperties}>
       <aside>
         <div className="portrait"><Portrait s={s} /></div>
         <div className="row" style={{ marginTop: 18 }}><Capsule n={s.birthNumber + 1} /><span className="muted" style={{ fontSize: 13 }}>{brainLine(s)}</span></div>
@@ -183,6 +184,7 @@ function Wake({ s, ask }: { s: ScribeView; ask?: string }) {
   const [remember, setRemember] = useState(false);
   const [hosted, setHosted] = useState<HostedStatus | null>(null);
   const [ownKey, setOwnKey] = useState(false); // use my own key instead of the free brain
+  const [pending, setPending] = useState<string | undefined>(ask); // a question to ask as soon as it wakes
   useEffect(() => { if (s.brain?.kind === 'bound') hostedStatus().then(setHosted); }, [s.brain?.kind]);
   const free = !!(hosted?.enabled && hosted.open && (hosted.remaining ?? 0) > 0) && !ownKey;
   // Arriving with a question (a link from the home page): wake on the free brain straight away.
@@ -229,7 +231,8 @@ function Wake({ s, ask }: { s: ScribeView; ask?: string }) {
     return m;
   }
 
-  async function wake() {
+  async function wake(q?: string) {
+    if (q) setPending(q);
     setBusy(true);
     setSteps([]);
     try {
@@ -256,7 +259,7 @@ function Wake({ s, ask }: { s: ScribeView; ask?: string }) {
 
   const bound = s.brain?.kind === 'bound';
   return (
-    <div className="panel">
+    <div className="panel wake-panel">
       <div className="panel-head"><h3>{brain ? `Talking to ${s.name}` : `Wake ${s.name}`}</h3>{brain && <span className="chip teal">Awake</span>}</div>
       {!brain && (
         <>
@@ -274,9 +277,15 @@ function Wake({ s, ask }: { s: ScribeView; ask?: string }) {
             </div>
           )}
           <div className="row">
-            <button className="primary" disabled={busy} onClick={wake}>{busy ? 'Waking…' : `Wake ${s.name}${bound && free ? ' — free' : ''}`}</button>
+            <button className="primary" disabled={busy} onClick={() => wake()}>{busy ? 'Waking…' : `Wake ${s.name}${bound && free ? ' — free' : ''}`}</button>
             {bound && hosted?.enabled && <button className="link" onClick={() => setOwnKey(!ownKey)}>{ownKey ? 'Use the free brain' : 'Use my own key instead'}</button>}
           </div>
+          {(!bound || free || key.trim()) && (
+            <div className="try">
+              <span className="muted">Or wake {s.name} and ask:</span>
+              {questions(s).map((t) => <button key={t} className="ask" disabled={busy} onClick={() => wake(t)}>{t}</button>)}
+            </div>
+          )}
         </>
       )}
       {steps.length > 0 && !brain && <ul className="trail">{steps.map((x, i) => <li key={i} className={x.state}>{x.text}</li>)}</ul>}
@@ -286,7 +295,7 @@ function Wake({ s, ask }: { s: ScribeView; ask?: string }) {
           <ul className="trail">{steps.map((x, i) => <li key={i} className={x.state}>{x.text}</li>)}</ul>
         </details>
       )}
-      {brain && personality && <Chat brain={brain} personality={personality} s={s} first={ask} />}
+      {brain && personality && <Chat brain={brain} personality={personality} s={s} first={pending} />}
     </div>
   );
 }
