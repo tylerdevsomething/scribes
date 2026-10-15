@@ -13,9 +13,9 @@ import { sha256Hex } from '../../lib/src/bytes.ts';
 import { chunkCount } from '../../lib/src/chunk.ts';
 import { writeFile, FileCollector } from '../../lib/src/chain.ts';
 import { readGguf } from '../../lib/src/gguf.ts';
-import { encodeManifest, formatLink, type Brain, type FileRef, type Manifest, type Role } from '../../lib/src/manifest.ts';
+import { encodeManifest, formatLink, type Brain, type FileRef, type Manifest, type Role, decodeManifest } from '../../lib/src/manifest.ts';
 import { parsePersonality, wordCount } from '../../lib/src/personality.ts';
-import { birthInstruction, configAddress, scribeAddress, scribesProgram, ZERO_SHA } from '../../lib/src/registry.ts';
+import { birthInstruction, configAddress, modelRecord, scribeAddress, scribesProgram, ZERO_SHA } from '../../lib/src/registry.ts';
 import { traits } from '../../lib/src/rarity.ts';
 import type { Indexer } from './indexer.ts';
 
@@ -27,7 +27,8 @@ export const LIMITS: Record<string, number> = {
   model: 2 * 1024 * 1024 * 1024,
 };
 const FEE_PER_CHUNK = 5000;
-const SCRIBE_ACCOUNT_BYTES = 8 + 159; // discriminator + Scribe (programs/scribes)
+const SCRIBE_ACCOUNT_BYTES = 8 + 191; // discriminator + Scribe (programs/scribes)
+const MODEL_RECORD_BYTES = 8 + 113; // discriminator + ModelMark: created by a model copy's first scribe
 const PICTURE_MAX = 100 * 1024;
 
 // A file of the new scribe. A reused file (already on chain) may have no bytes here, only its size.
@@ -38,6 +39,8 @@ export interface Quote {
   inscriptionLamports: number; // paid to the writer, covers those fees
   recordRentLamports: number; // the scribe's on-chain record (paid by the owner in the birth)
   birthFeeLamports: number;
+  modelRecordRentLamports: number; // the model copy's record, for its first scribe (the Autograph)
+  royaltyLamports: number; // to the owner of the model's Autograph scribe, for later scribes on it
   networkFeeLamports: number; // the checkout transaction itself (two signatures)
   totalLamports: number;
 }
@@ -233,7 +236,7 @@ export class Uploads {
     };
     const mbytes = encodeManifest(manifest);
     const msha = await sha256Hex(mbytes);
-    if (await this.conn.getAccountInfo(scribeAddress(msha))) {
+    if (await this.conn.getAccountInfo(scribeAddress(me, msha))) {
       problems.push('This exact scribe is already born');
       this.set(id, { phase: 'checked', report });
       return report;
@@ -241,16 +244,27 @@ export class Uploads {
     writeFileSync(join(dir, 'manifest.json'), mbytes);
 
     const chunks = parts.filter((x) => !x.reusedFrom).reduce((n, x) => n + chunkCount(x.size), 0) + chunkCount(mbytes.length);
-    const config = await scribesProgram(this.conn).account.config.fetch(configAddress());
+    const program = scribesProgram(this.conn);
+    const config = await program.account.config.fetch(configAddress());
     const rent = await this.conn.getMinimumBalanceForRentExemption(SCRIBE_ACCOUNT_BYTES);
+    // An inscribed model: the first scribe on this copy is its Autograph (and creates its record); later
+    // ones pay the royalty to the Autograph's owner.
+    const modelFile = brain.kind === 'inscribed' ? manifest.files.find((f) => f.sha256 === brain.model)! : null;
+    const mark = modelFile ? await modelRecord(program, modelFile.sha256, modelFile.writer) : null;
+    const autograph = !!modelFile && !mark;
+    const markRent = autograph ? await this.conn.getMinimumBalanceForRentExemption(MODEL_RECORD_BYTES) : 0;
+    const royalty = mark ? config.modelRoyalty.toNumber() : 0;
     const inscription = Math.ceil(chunks * FEE_PER_CHUNK * 1.1) + 10_000; // 10% for resends
     const birthFee = config.birthFee.toNumber();
     const network = 2 * 5000;
-    report.quote = { chunks, inscriptionLamports: inscription, recordRentLamports: rent, birthFeeLamports: birthFee, networkFeeLamports: network, totalLamports: inscription + rent + birthFee + network };
+    report.quote = {
+      chunks, inscriptionLamports: inscription, recordRentLamports: rent, birthFeeLamports: birthFee, modelRecordRentLamports: markRent,
+      royaltyLamports: royalty, networkFeeLamports: network, totalLamports: inscription + rent + birthFee + markRent + royalty + network,
+    };
     report.link = formatLink({ writer: me, sha256: msha, size: mbytes.length });
-    report.scribe = scribeAddress(msha).toBase58();
+    report.scribe = scribeAddress(me, msha).toBase58();
     report.attributes = traits({
-      address: report.scribe, birthNumber: config.births.toNumber(), autograph: false, verified: false,
+      address: report.scribe, birthNumber: config.births.toNumber(), autograph, verified: false,
       brain: brain.kind, model: brain.kind === 'inscribed' ? brain.model : `${brain.provider}:${brain.model}`,
       weightBytes: brain.kind === 'inscribed' ? parts.find((x) => x.role === 'model')!.size : null,
       personalityWords: words, tools, memory,
@@ -269,9 +283,11 @@ export class Uploads {
     const mbytes = new Uint8Array(readFileSync(join(dir, 'manifest.json')));
     const msha = await sha256Hex(mbytes);
     const brain = s.report.brain!;
+    const manifest = decodeManifest(mbytes);
     const birth = await birthInstruction(scribesProgram(this.conn), {
       owner, writer: this.writer.publicKey, manifestSha: msha, manifestSize: mbytes.length,
       modelSha: brain.kind === 'inscribed' ? brain.model : ZERO_SHA,
+      modelWriter: brain.kind === 'inscribed' ? manifest.files.find((f) => f.sha256 === brain.model)!.writer : null,
     });
     const { blockhash, lastValidBlockHeight } = await this.conn.getLatestBlockhash('confirmed');
     const tx = new Transaction({ feePayer: owner, blockhash, lastValidBlockHeight })

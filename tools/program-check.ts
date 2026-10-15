@@ -26,8 +26,8 @@ const LOADER = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
 
 const pda = (...seeds: (Buffer | Uint8Array)[]) => PublicKey.findProgramAddressSync(seeds.map((s) => Buffer.from(s)), PID)[0];
 const configPda = pda(Buffer.from('config'));
-const scribePda = (m: Buffer) => pda(Buffer.from('scribe'), m);
-const modelPda = (m: Buffer) => pda(Buffer.from('model'), m);
+const scribePda = (writer: PublicKey, m: Buffer) => pda(Buffer.from('scribe'), writer.toBuffer(), m);
+const modelPda = (m: Buffer, writer: PublicKey) => pda(Buffer.from('model'), m, writer.toBuffer());
 const sha = (s: string) => createHash('sha256').update(s).digest();
 const ZERO = Buffer.alloc(32);
 
@@ -57,10 +57,13 @@ async function funded(sol = 5): Promise<Keypair> {
   return k;
 }
 
-function birthIx(owner: PublicKey, writer: PublicKey, manifest: Buffer, model: Buffer, feeReceiver: PublicKey) {
+function birthIx(owner: PublicKey, writer: PublicKey, manifest: Buffer, model: Buffer, modelWriter: PublicKey, feeReceiver: PublicKey, royalty?: { autograph: PublicKey; receiver: PublicKey }) {
   return program.methods
-    .birth({ manifestSha: [...manifest], manifestSize: 900, modelSha: [...model] })
-    .accountsPartial({ owner, writer, config: configPda, scribe: scribePda(manifest), modelMark: modelPda(model), feeReceiver, systemProgram: SystemProgram.programId });
+    .birth({ manifestSha: [...manifest], manifestSize: 900, modelSha: [...model], modelWriter })
+    .accountsPartial({
+      owner, writer, config: configPda, scribe: scribePda(writer, manifest), modelMark: modelPda(model, modelWriter), feeReceiver,
+      autographScribe: royalty?.autograph ?? null, royaltyReceiver: royalty?.receiver ?? null, systemProgram: SystemProgram.programId,
+    });
 }
 
 function pass(signer: Keypair, scribe: PublicKey, manifest: Buffer) {
@@ -72,18 +75,24 @@ async function main() {
   const programData = PublicKey.findProgramAddressSync([PID.toBuffer()], LOADER)[0];
   const verifier = Keypair.generate();
   const feeReceiver = Keypair.generate().publicKey;
-  const settings = { admin: admin.publicKey, verifier: verifier.publicKey, feeReceiver, birthFee: new BN(10_000_000), burnMint: PublicKey.default, burnAmount: new BN(0) };
+  const ROYALTY = 10_000_000;
+  const settings = { admin: admin.publicKey, verifier: verifier.publicKey, feeReceiver, birthFee: new BN(10_000_000), burnMint: PublicKey.default, burnAmount: new BN(0), modelRoyalty: new BN(ROYALTY) };
   console.log(`program ${PID.toBase58()}`);
+  if ((await conn.getBalance(admin.publicKey)) < LAMPORTS_PER_SOL) await conn.confirmTransaction(await conn.requestAirdrop(admin.publicKey, 10 * LAMPORTS_PER_SOL), 'confirmed');
 
   const stranger = await funded();
   await refuses('initialize by someone other than the upgrade authority', () =>
     program.methods.initialize(settings).accountsPartial({ payer: stranger.publicKey, config: configPda, program: PID, programData }).signers([stranger]).rpc(),
   /NotUpgradeAuthority/);
+  await refuses('a model royalty above 0.1 SOL', () =>
+    program.methods.initialize({ ...settings, modelRoyalty: new BN(100_000_001) }).accountsPartial({ payer: admin.publicKey, config: configPda, program: PID, programData }).rpc(),
+  /RoyaltyTooHigh/);
   await check('initialize by the upgrade authority', async () => {
     await program.methods.initialize(settings).accountsPartial({ payer: admin.publicKey, config: configPda, program: PID, programData }).rpc();
     const c = await program.account.config.fetch(configPda);
     assert.equal(c.births.toNumber(), 0);
     assert.ok(c.verifier.equals(verifier.publicKey));
+    assert.equal(c.modelRoyalty.toNumber(), ROYALTY);
   });
   await refuses('initialize twice', () =>
     program.methods.initialize(settings).accountsPartial({ payer: admin.publicKey, config: configPda, program: PID, programData }).rpc(),
@@ -91,12 +100,15 @@ async function main() {
 
   const alice = await funded();
   const bob = await funded();
-  const writer = Keypair.generate();
+  const writer = Keypair.generate(); // inscribed model A, and writes alice's manifests
+  const bobWriter = Keypair.generate(); // writes bob's manifests, which reuse writer's copy of model A
   const modelA = sha('model A');
-  const m1 = sha('manifest 1'), m2 = sha('manifest 2'), m3 = sha('manifest 3'), m4 = sha('manifest 4');
+  const m1 = sha('manifest 1'), m2 = sha('manifest 2'), m3 = sha('manifest 3'), m4 = sha('manifest 4'), m5 = sha('manifest 5');
+  const s1 = scribePda(writer.publicKey, m1);
+  const D = PublicKey.default;
 
   await refuses('birth without the writer signing', async () => {
-    const ix = await birthIx(alice.publicKey, writer.publicKey, m1, modelA, feeReceiver).instruction();
+    const ix = await birthIx(alice.publicKey, writer.publicKey, m1, modelA, writer.publicKey, feeReceiver).instruction();
     const tx = new Transaction().add(ix);
     tx.feePayer = alice.publicKey;
     tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
@@ -104,49 +116,86 @@ async function main() {
     await conn.sendRawTransaction(tx.serialize({ requireAllSignatures: false }));
   }, /signature|Signature/);
   await refuses('birth paying the fee to the wrong account', () =>
-    birthIx(alice.publicKey, writer.publicKey, m1, modelA, bob.publicKey).signers([alice, writer]).rpc(),
+    birthIx(alice.publicKey, writer.publicKey, m1, modelA, writer.publicKey, bob.publicKey).signers([alice, writer]).rpc(),
   /WrongFeeReceiver/);
+  await refuses("claiming the Autograph of someone else's model copy (first scribe not born by its writer)", () =>
+    birthIx(bob.publicKey, bobWriter.publicKey, m2, modelA, writer.publicKey, feeReceiver).signers([bob, bobWriter]).rpc(),
+  /ModelNotYours/);
 
-  await check('first scribe on a model: birth #0 with the Autograph, fee paid', async () => {
+  await check('first scribe on a model copy, born by its writer: birth #0 with the Autograph, fee paid', async () => {
     const before = await conn.getBalance(feeReceiver);
-    await birthIx(alice.publicKey, writer.publicKey, m1, modelA, feeReceiver).signers([alice, writer]).rpc();
-    const s = await program.account.scribe.fetch(scribePda(m1));
+    await birthIx(alice.publicKey, writer.publicKey, m1, modelA, writer.publicKey, feeReceiver).signers([alice, writer]).rpc();
+    const s = await program.account.scribe.fetch(s1);
     assert.equal(s.birthNumber.toNumber(), 0);
     assert.equal(s.autograph, true);
     assert.ok(s.owner.equals(alice.publicKey));
     assert.ok(s.writer.equals(writer.publicKey));
+    assert.ok(s.modelWriter.equals(writer.publicKey));
     assert.equal((await conn.getBalance(feeReceiver)) - before, 10_000_000);
-    // ModelMark: 8-byte discriminator, model_sha (32), first_scribe (32), first_birth (u64), bump
-    const mark = (await conn.getAccountInfo(modelPda(modelA)))!;
+    // ModelMark: 8-byte discriminator, model_sha (32), first_scribe (32), first_birth (u64), bump, writer (32)
+    const mark = (await conn.getAccountInfo(modelPda(modelA, writer.publicKey)))!;
     assert.ok(mark.owner.equals(PID));
     assert.deepEqual(mark.data.subarray(8, 40), modelA);
-    assert.ok(new PublicKey(mark.data.subarray(40, 72)).equals(scribePda(m1)));
+    assert.ok(new PublicKey(mark.data.subarray(40, 72)).equals(s1));
+    assert.ok(new PublicKey(mark.data.subarray(81, 113)).equals(writer.publicKey));
   });
-  await check('second scribe on the same model: birth #1, no Autograph', async () => {
-    await birthIx(bob.publicKey, writer.publicKey, m2, modelA, feeReceiver).signers([bob, writer]).rpc();
-    const s = await program.account.scribe.fetch(scribePda(m2));
-    assert.equal(s.birthNumber.toNumber(), 1);
+  await refuses('a later scribe on the model without the royalty accounts', () =>
+    birthIx(bob.publicKey, bobWriter.publicKey, m2, modelA, writer.publicKey, feeReceiver).signers([bob, bobWriter]).rpc(),
+  /WrongAutograph/);
+  await refuses('a later scribe paying the royalty to someone other than the Autograph owner', () =>
+    birthIx(bob.publicKey, bobWriter.publicKey, m2, modelA, writer.publicKey, feeReceiver, { autograph: s1, receiver: stranger.publicKey }).signers([bob, bobWriter]).rpc(),
+  /WrongAutograph/);
+  await check('the same manifest under another writer lands at another address (a seen manifest cannot be claimed first)', async () => {
+    await birthIx(stranger.publicKey, stranger.publicKey, m4, ZERO, D, feeReceiver).signers([stranger]).rpc();
+    assert.ok(!scribePda(stranger.publicKey, m4).equals(scribePda(writer.publicKey, m4)));
+    assert.equal(await conn.getAccountInfo(scribePda(writer.publicKey, m4)), null);
+  });
+  await refuses('a royalty routed through the wrong Autograph scribe (one the attacker owns)', () =>
+    birthIx(bob.publicKey, bobWriter.publicKey, m2, modelA, writer.publicKey, feeReceiver, { autograph: scribePda(stranger.publicKey, m4), receiver: stranger.publicKey }).signers([bob, bobWriter]).rpc(),
+  /WrongAutograph/);
+  await check("a later scribe on the model: no Autograph, pays the royalty to the Autograph's owner", async () => {
+    const before = await conn.getBalance(alice.publicKey);
+    await birthIx(bob.publicKey, bobWriter.publicKey, m2, modelA, writer.publicKey, feeReceiver, { autograph: s1, receiver: alice.publicKey }).signers([bob, bobWriter]).rpc();
+    const s = await program.account.scribe.fetch(scribePda(bobWriter.publicKey, m2));
     assert.equal(s.autograph, false);
+    assert.equal((await conn.getBalance(alice.publicKey)) - before, ROYALTY);
   });
-  await refuses('the same manifest born twice', () =>
-    birthIx(bob.publicKey, writer.publicKey, m1, modelA, feeReceiver).signers([bob, writer]).rpc(),
+  await refuses('the same manifest born twice by the same writer', () =>
+    birthIx(alice.publicKey, writer.publicKey, m1, modelA, writer.publicKey, feeReceiver, { autograph: s1, receiver: alice.publicKey }).signers([alice, writer]).rpc(),
   /already in use/);
-  await check('a bound brain (no model): birth #2, no Autograph, no model record', async () => {
-    await birthIx(bob.publicKey, bob.publicKey, m3, ZERO, feeReceiver).signers([bob]).rpc();
-    const s = await program.account.scribe.fetch(scribePda(m3));
-    assert.equal(s.birthNumber.toNumber(), 2);
+  await check("the Autograph's owner using their own model pays no royalty", async () => {
+    const before = await conn.getBalance(alice.publicKey);
+    await birthIx(alice.publicKey, writer.publicKey, m3, modelA, writer.publicKey, feeReceiver, { autograph: s1, receiver: alice.publicKey }).signers([alice, writer]).rpc();
+    const spent = before - (await conn.getBalance(alice.publicKey));
+    const rent = (await conn.getAccountInfo(scribePda(writer.publicKey, m3)))!.lamports;
+    assert.ok(spent < 10_000_000 + rent + ROYALTY / 2, `alice spent ${spent}`); // fee + rent + network fee, no royalty
+  });
+  await refuses('a bound brain naming a model writer', () =>
+    birthIx(bob.publicKey, bob.publicKey, m5, ZERO, writer.publicKey, feeReceiver).signers([bob]).rpc(),
+  /BadModel/);
+  await check('a bound brain (no model): no Autograph, no model record, no royalty', async () => {
+    await birthIx(bob.publicKey, bob.publicKey, m5, ZERO, D, feeReceiver).signers([bob]).rpc();
+    const s = await program.account.scribe.fetch(scribePda(bob.publicKey, m5));
     assert.equal(s.autograph, false);
-    assert.equal(await conn.getAccountInfo(modelPda(ZERO)), null);
+    assert.equal(await conn.getAccountInfo(modelPda(ZERO, D)), null);
   });
   await check('a model whose record address was pre-funded by someone else still gets its Autograph', async () => {
     const modelB = sha('model B');
-    await sendAndConfirmTransaction(conn, new Transaction().add(SystemProgram.transfer({ fromPubkey: bob.publicKey, toPubkey: modelPda(modelB), lamports: 1_000_000 })), [bob]);
-    await birthIx(alice.publicKey, writer.publicKey, m4, modelB, feeReceiver).signers([alice, writer]).rpc();
-    assert.equal((await program.account.scribe.fetch(scribePda(m4))).autograph, true);
+    await sendAndConfirmTransaction(conn, new Transaction().add(SystemProgram.transfer({ fromPubkey: bob.publicKey, toPubkey: modelPda(modelB, writer.publicKey), lamports: 1_000_000 })), [bob]);
+    await birthIx(alice.publicKey, writer.publicKey, m4, modelB, writer.publicKey, feeReceiver).signers([alice, writer]).rpc();
+    assert.equal((await program.account.scribe.fetch(scribePda(writer.publicKey, m4))).autograph, true);
+  });
+  await check('the royalty follows the Autograph when it changes hands', async () => {
+    const heir = Keypair.generate();
+    const newOwner = heir.publicKey;
+    await program.methods.give(newOwner).accountsPartial({ owner: alice.publicKey, scribe: s1 }).signers([alice]).rpc();
+    const m6 = sha('manifest 6');
+    await birthIx(bob.publicKey, bobWriter.publicKey, m6, modelA, writer.publicKey, feeReceiver, { autograph: s1, receiver: newOwner }).signers([bob, bobWriter]).rpc();
+    assert.equal(await conn.getBalance(newOwner), ROYALTY);
+    await program.methods.give(alice.publicKey).accountsPartial({ owner: newOwner, scribe: s1 }).signers([heir]).rpc(); // back to alice for the checks below
   });
 
   // ---- verification ----
-  const s1 = scribePda(m1);
   const mintAuthority = await funded();
   const mint = await createMint(conn, mintAuthority, mintAuthority.publicKey, null, 6, undefined, { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
   const aliceTokens = (await getOrCreateAssociatedTokenAccount(conn, alice, mint, alice.publicKey, false, 'confirmed', undefined, TOKEN_2022_PROGRAM_ID)).address;
@@ -169,7 +218,7 @@ async function main() {
     verify(alice, s1, aliceTokens).preInstructions([pass(stranger, s1, m1)]).rpc(),
   /WrongVerifier/);
   await refuses('verify with a pass for a different scribe', () =>
-    verify(alice, s1, aliceTokens).preInstructions([pass(verifier, scribePda(m2), m2)]).rpc(),
+    verify(alice, s1, aliceTokens).preInstructions([pass(verifier, scribePda(bobWriter.publicKey, m2), m2)]).rpc(),
   /BadPass/);
   await refuses('verify a scribe you do not own', async () => {
     const bobTokens = (await getOrCreateAssociatedTokenAccount(conn, bob, mint, bob.publicKey, false, 'confirmed', undefined, TOKEN_2022_PROGRAM_ID)).address;

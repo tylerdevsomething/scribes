@@ -5,7 +5,7 @@
 //   node tools/cli.ts inscribe --key <keypair.json> --rpc <url> --personality <file.json>
 //                              (--model <file.gguf> | --bound <provider>:<model>) [--rps 10] [--price 0]
 //   node tools/cli.ts rebuild  --link <scribes:v1:...> --rpc <url> [--out .cache/files]
-//   node tools/cli.ts init     --key <upgrade authority.json> --rpc <url> [--verifier <pk>] [--fee-receiver <pk>] [--fee <lamports>]
+//   node tools/cli.ts init     --key <upgrade authority.json> --rpc <url> [--verifier <pk>] [--fee-receiver <pk>] [--fee <lamports>] [--royalty 0.01]
 //   node tools/cli.ts market   --key <admin.json> --rpc <url> --fee-bps 250
 //   node tools/cli.ts test-token --key <admin.json> --rpc <url> [--burn 10] [--verifier <pk>] [--mint-authority <pk>] [--to <pk> --amount 100]   (not mainnet)
 //   (inscribe registers the scribe with the program at the end; --no-birth skips that)
@@ -139,13 +139,14 @@ async function main() {
     console.log(`\nscribe link: ${formatLink({ writer: mref.writer, sha256: mref.sha256, size: mref.size })}`);
     if (a['no-birth'] !== 'true') {
       const program = scribesProgram(conn);
-      const scribe = scribeAddress(mref.sha256);
+      const scribe = scribeAddress(key.publicKey, mref.sha256);
       if (await conn.getAccountInfo(scribe)) {
         console.log(`scribe ${scribe.toBase58()} is already born`);
       } else {
         const ix = await birthInstruction(program, {
           owner: key.publicKey, writer: key.publicKey, manifestSha: mref.sha256, manifestSize: mref.size,
           modelSha: brain.kind === 'inscribed' ? brain.model : ZERO_SHA,
+          modelWriter: brain.kind === 'inscribed' ? key.publicKey : null, // every file here is this key's
         });
         const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
         const s = await program.account.scribe.fetch(scribe);
@@ -164,6 +165,7 @@ async function main() {
       birthFee: Number(a.fee ?? 0),
       burnMint: PublicKey.default,
       burnAmount: 0n,
+      modelRoyalty: Math.round(Number(a.royalty ?? '0.01') * LAMPORTS_PER_SOL),
     });
     const ix = await program.methods.initialize(settings)
       .accountsPartial({ payer: key.publicKey, config: configAddress(), program: program.programId, programData }).instruction();
@@ -194,7 +196,7 @@ async function main() {
     const burn = BigInt(a.burn ?? '10') * 1_000_000n;
     const settings = settingsArg({
       admin: key.publicKey, verifier: new PublicKey(a.verifier ?? current.verifier), feeReceiver: new PublicKey(current.feeReceiver),
-      birthFee: current.birthFee, burnMint: mint, burnAmount: burn,
+      birthFee: current.birthFee, burnMint: mint, burnAmount: burn, modelRoyalty: current.modelRoyalty,
     });
     const ix = await program.methods.setSettings(settings).accountsPartial({ admin: key.publicKey, config: configAddress() }).instruction();
     await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });

@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-scribes = "E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq"
+scribes = "6BRHHJARif6TZJKjuJr8k7vFTr9gUxp7C5KaGMZBRBRD"
 
 [programs.devnet]
-scribes = "E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq"
+scribes = "6BRHHJARif6TZJKjuJr8k7vFTr9gUxp7C5KaGMZBRBRD"
 
 [provider]
 cluster = "localnet"

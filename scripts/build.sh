@@ -6,7 +6,7 @@ set -euo pipefail
 export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 cd "$(dirname "$0")/.."
 mkdir -p target/deploy
-cp /mnt/c/Users/Admin/scribes-keys/program-scribes.json target/deploy/scribes-keypair.json
+cp /mnt/c/Users/Admin/scribes-keys/program-scribes-2.json target/deploy/scribes-keypair.json
 # Solana's platform tools bundle an older Cargo; resolve dependencies to versions it can build.
 if [ ! -f Cargo.lock ]; then
   CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo +stable generate-lockfile

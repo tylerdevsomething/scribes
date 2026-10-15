@@ -312,6 +312,8 @@ function Report({ report, id, onPhase }: { report: CheckReport; id: string; onPh
               <tr><td>Inscription · {q.chunks.toLocaleString()} transactions</td><td>{sol(q.inscriptionLamports)} SOL</td></tr>
               <tr><td>On-chain record (rent)</td><td>{sol(q.recordRentLamports)} SOL</td></tr>
               {q.birthFeeLamports > 0 && <tr><td>Birth fee</td><td>{sol(q.birthFeeLamports)} SOL</td></tr>}
+              {q.modelRecordRentLamports > 0 && <tr><td>Model record (rent) — this scribe is the model's Autograph</td><td>{sol(q.modelRecordRentLamports)} SOL</td></tr>}
+              {q.royaltyLamports > 0 && <tr><td>Model royalty (to whoever owns the model's Autograph)</td><td>{sol(q.royaltyLamports)} SOL</td></tr>}
               <tr><td>Network fee</td><td>{sol(q.networkFeeLamports)} SOL</td></tr>
               <tr className="total"><td>Total</td><td>{sol(q.totalLamports)} SOL</td></tr>
             </tbody></table>

@@ -1,5 +1,5 @@
 {
-  "address": "E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq",
+  "address": "6BRHHJARif6TZJKjuJr8k7vFTr9gUxp7C5KaGMZBRBRD",
   "metadata": {
     "name": "scribes",
     "version": "0.1.0",
@@ -76,6 +76,11 @@
               },
               {
                 "kind": "account",
+                "path": "scribe.writer",
+                "account": "Scribe"
+              },
+              {
+                "kind": "account",
                 "path": "scribe.manifest_sha",
                 "account": "Scribe"
               }
@@ -132,8 +137,13 @@
     {
       "name": "birth",
       "docs": [
-        "Registers a scribe. Signed by its owner (who pays) and by the writer of its manifest, so nobody",
-        "can see a manifest on chain and claim it first."
+        "Registers a scribe. Signed by its owner (who pays) and by the writer of its manifest. The scribe's",
+        "address includes the writer, so seeing a manifest on chain does not let anyone else claim it.",
+        "",
+        "A scribe with an inscribed model names the model's sha256 and the writer of its copy. The first",
+        "scribe on a copy (its Autograph) must be born by that copy's own writer: nobody can claim a model",
+        "they did not inscribe. Every later scribe on the copy pays the model royalty to the Autograph",
+        "scribe's current owner, so inscribing a model can pay for itself."
       ],
       "discriminator": [
         88,
@@ -191,6 +201,10 @@
                 ]
               },
               {
+                "kind": "account",
+                "path": "writer"
+              },
+              {
                 "kind": "arg",
                 "path": "args.manifest_sha"
               }
@@ -215,6 +229,10 @@
               {
                 "kind": "arg",
                 "path": "args.model_sha"
+              },
+              {
+                "kind": "arg",
+                "path": "args.model_writer"
               }
             ]
           }
@@ -222,6 +240,19 @@
         {
           "name": "fee_receiver",
           "writable": true
+        },
+        {
+          "name": "autograph_scribe",
+          "docs": [
+            "The model copy's Autograph scribe and its current owner, paid the royalty (checked in pay_royalty).",
+            "Needed only when the copy already has an Autograph and the royalty is above zero."
+          ],
+          "optional": true
+        },
+        {
+          "name": "royalty_receiver",
+          "writable": true,
+          "optional": true
         },
         {
           "name": "system_program",
@@ -312,6 +343,11 @@
                   98,
                   101
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe.writer",
+                "account": "Scribe"
               },
               {
                 "kind": "account",
@@ -406,6 +442,11 @@
               },
               {
                 "kind": "account",
+                "path": "scribe.writer",
+                "account": "Scribe"
+              },
+              {
+                "kind": "account",
                 "path": "scribe.manifest_sha",
                 "account": "Scribe"
               }
@@ -487,6 +528,11 @@
               },
               {
                 "kind": "account",
+                "path": "scribe.writer",
+                "account": "Scribe"
+              },
+              {
+                "kind": "account",
                 "path": "scribe.manifest_sha",
                 "account": "Scribe"
               }
@@ -543,7 +589,7 @@
         },
         {
           "name": "program",
-          "address": "E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq"
+          "address": "6BRHHJARif6TZJKjuJr8k7vFTr9gUxp7C5KaGMZBRBRD"
         },
         {
           "name": "program_data"
@@ -603,6 +649,11 @@
                   98,
                   101
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "scribe.writer",
+                "account": "Scribe"
               },
               {
                 "kind": "account",
@@ -969,6 +1020,11 @@
               },
               {
                 "kind": "account",
+                "path": "scribe.writer",
+                "account": "Scribe"
+              },
+              {
+                "kind": "account",
                 "path": "scribe.manifest_sha",
                 "account": "Scribe"
               }
@@ -1285,6 +1341,26 @@
       "code": 6020,
       "name": "BountyStillOpen",
       "msg": "The bounty is still open: it can be refunded after its deadline"
+    },
+    {
+      "code": 6021,
+      "name": "BadModel",
+      "msg": "A bound brain names no model writer"
+    },
+    {
+      "code": 6022,
+      "name": "ModelNotYours",
+      "msg": "The first scribe on a model must be born by the model's own writer"
+    },
+    {
+      "code": 6023,
+      "name": "WrongAutograph",
+      "msg": "The royalty accounts are not the model's Autograph scribe and its owner"
+    },
+    {
+      "code": 6024,
+      "name": "RoyaltyTooHigh",
+      "msg": "The model royalty can be at most 0.1 SOL"
     }
   ],
   "types": [
@@ -1317,6 +1393,13 @@
                 32
               ]
             }
+          },
+          {
+            "name": "model_writer",
+            "docs": [
+              "The writer of the model copy the manifest names (the default key for a bound brain)."
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -1341,6 +1424,13 @@
           {
             "name": "autograph",
             "type": "bool"
+          },
+          {
+            "name": "royalty",
+            "docs": [
+              "Lamports paid to the model's Autograph owner."
+            ],
+            "type": "u64"
           }
         ]
       }
@@ -1495,6 +1585,10 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "model_royalty",
+            "type": "u64"
           }
         ]
       }
@@ -1637,6 +1731,10 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "model_writer",
+            "type": "pubkey"
           }
         ]
       }
@@ -1671,6 +1769,13 @@
           },
           {
             "name": "burn_amount",
+            "type": "u64"
+          },
+          {
+            "name": "model_royalty",
+            "docs": [
+              "Lamports each scribe pays to the owner of its model's Autograph scribe (at most MAX_MODEL_ROYALTY)."
+            ],
             "type": "u64"
           }
         ]

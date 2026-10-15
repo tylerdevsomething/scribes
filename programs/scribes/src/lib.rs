@@ -9,7 +9,7 @@ use anchor_lang::solana_program::{ed25519_program, sysvar::instructions as ix_sy
 use anchor_lang::system_program::{self, Allocate, Assign, CreateAccount, Transfer};
 use anchor_spl::token_interface::{self, Burn, Mint, TokenAccount, TokenInterface};
 
-declare_id!("E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq");
+declare_id!("6BRHHJARif6TZJKjuJr8k7vFTr9gUxp7C5KaGMZBRBRD");
 
 /// The verifier signs VERIFY_DOMAIN || scribe address || manifest sha256.
 pub const VERIFY_DOMAIN: &[u8] = b"scribes:v1:verify";
@@ -21,7 +21,7 @@ pub mod scribes {
     /// Creates the settings. Only the program's upgrade authority can call it, once.
     pub fn initialize(ctx: Context<Initialize>, settings: Settings) -> Result<()> {
         let c = &mut ctx.accounts.config;
-        c.apply(settings);
+        c.apply(settings)?;
         c.births = 0;
         c.bump = ctx.bumps.config;
         Ok(())
@@ -29,31 +29,41 @@ pub mod scribes {
 
     /// Changes the settings (the admin will be the multisig).
     pub fn set_settings(ctx: Context<SetSettings>, settings: Settings) -> Result<()> {
-        ctx.accounts.config.apply(settings);
-        Ok(())
+        ctx.accounts.config.apply(settings)
     }
 
-    /// Registers a scribe. Signed by its owner (who pays) and by the writer of its manifest, so nobody
-    /// can see a manifest on chain and claim it first.
+    /// Registers a scribe. Signed by its owner (who pays) and by the writer of its manifest. The scribe's
+    /// address includes the writer, so seeing a manifest on chain does not let anyone else claim it.
+    ///
+    /// A scribe with an inscribed model names the model's sha256 and the writer of its copy. The first
+    /// scribe on a copy (its Autograph) must be born by that copy's own writer: nobody can claim a model
+    /// they did not inscribe. Every later scribe on the copy pays the model royalty to the Autograph
+    /// scribe's current owner, so inscribing a model can pay for itself.
     pub fn birth(ctx: Context<Birth>, args: BirthArgs) -> Result<()> {
         require!(args.manifest_size > 0, ScribeError::EmptyManifest);
-        let fee = ctx.accounts.config.birth_fee;
-        if fee > 0 {
-            system_program::transfer(
-                CpiContext::new(
-                    ctx.accounts.system_program.to_account_info(),
-                    Transfer { from: ctx.accounts.owner.to_account_info(), to: ctx.accounts.fee_receiver.to_account_info() },
-                ),
-                fee,
-            )?;
-        }
+        let bound = args.model_sha == [0u8; 32];
+        require!(!bound || args.model_writer == Pubkey::default(), ScribeError::BadModel);
+        let sys = ctx.accounts.system_program.to_account_info();
+        let owner = ctx.accounts.owner.to_account_info();
+        pay(&sys, &owner, ctx.accounts.fee_receiver.to_account_info(), ctx.accounts.config.birth_fee)?;
 
         let config = &mut ctx.accounts.config;
         let number = config.births;
         config.births = number.checked_add(1).ok_or(ScribeError::Overflow)?;
+        let royalty_rate = config.model_royalty;
 
         let scribe_key = ctx.accounts.scribe.key();
-        let autograph = args.model_sha != [0u8; 32] && claim_model(&ctx, &args, scribe_key, number)?;
+        let mut autograph = false;
+        let mut royalty = 0;
+        if !bound {
+            if ctx.accounts.model_mark.owner == &crate::ID {
+                royalty = pay_royalty(&ctx, royalty_rate)?;
+            } else {
+                require_keys_eq!(ctx.accounts.writer.key(), args.model_writer, ScribeError::ModelNotYours);
+                claim_model(&ctx, &args, scribe_key, number)?;
+                autograph = true;
+            }
+        }
 
         let s = &mut ctx.accounts.scribe;
         s.owner = ctx.accounts.owner.key();
@@ -67,8 +77,9 @@ pub mod scribes {
         s.verified = false;
         s.verified_slot = 0;
         s.bump = ctx.bumps.scribe;
+        s.model_writer = args.model_writer;
 
-        emit!(Born { scribe: scribe_key, owner: s.owner, birth_number: number, autograph });
+        emit!(Born { scribe: scribe_key, owner: s.owner, birth_number: number, autograph, royalty });
         Ok(())
     }
 
@@ -226,16 +237,33 @@ fn pay<'a>(sys: &AccountInfo<'a>, from: &AccountInfo<'a>, to: AccountInfo<'a>, a
 /// Highest sale fee the admin can set: 10%.
 pub const MAX_FEE_BPS: u16 = 1_000;
 
-/// Creates the model's record if this is the first scribe to use the model. Returns true if so.
-fn claim_model(ctx: &Context<Birth>, args: &BirthArgs, scribe: Pubkey, number: u64) -> Result<bool> {
-    let mark = &ctx.accounts.model_mark;
-    if *mark.owner == crate::ID {
-        return Ok(false); // an earlier scribe already holds the Autograph
+/// Highest model royalty the admin can set: 0.1 SOL.
+pub const MAX_MODEL_ROYALTY: u64 = 100_000_000;
+
+/// Pays the model royalty to the current owner of the model copy's Autograph scribe. Returns the amount.
+fn pay_royalty(ctx: &Context<Birth>, rate: u64) -> Result<u64> {
+    if rate == 0 {
+        return Ok(0);
     }
+    let mark = ModelMark::try_deserialize(&mut &ctx.accounts.model_mark.try_borrow_data()?[..])?;
+    let first = ctx.accounts.autograph_scribe.as_ref().ok_or(ScribeError::WrongAutograph)?;
+    let to = ctx.accounts.royalty_receiver.as_ref().ok_or(ScribeError::WrongAutograph)?;
+    require_keys_eq!(first.key(), mark.first_scribe, ScribeError::WrongAutograph);
+    require_keys_eq!(to.key(), first.owner, ScribeError::WrongAutograph);
+    if to.key() == ctx.accounts.owner.key() {
+        return Ok(0); // the Autograph's owner using their own model pays themselves nothing
+    }
+    pay(&ctx.accounts.system_program.to_account_info(), &ctx.accounts.owner.to_account_info(), to.to_account_info(), rate)?;
+    Ok(rate)
+}
+
+/// Creates the record of a model copy for its first scribe (the Autograph).
+fn claim_model(ctx: &Context<Birth>, args: &BirthArgs, scribe: Pubkey, number: u64) -> Result<()> {
+    let mark = &ctx.accounts.model_mark;
     let space = 8 + ModelMark::INIT_SPACE;
     let rent = Rent::get()?.minimum_balance(space);
     let bump = [ctx.bumps.model_mark];
-    let seeds: &[&[u8]] = &[b"model", args.model_sha.as_ref(), &bump];
+    let seeds: &[&[u8]] = &[b"model", args.model_sha.as_ref(), args.model_writer.as_ref(), &bump];
     let sys = ctx.accounts.system_program.to_account_info();
     let payer = ctx.accounts.owner.to_account_info();
     if mark.lamports() == 0 {
@@ -256,11 +284,13 @@ fn claim_model(ctx: &Context<Birth>, args: &BirthArgs, scribe: Pubkey, number: u
         system_program::allocate(CpiContext::new_with_signer(sys.clone(), Allocate { account_to_allocate: mark.to_account_info() }, &[seeds]), space as u64)?;
         system_program::assign(CpiContext::new_with_signer(sys, Assign { account_to_assign: mark.to_account_info() }, &[seeds]), &crate::ID)?;
     }
-    let record = ModelMark { model_sha: args.model_sha, first_scribe: scribe, first_birth: number, bump: ctx.bumps.model_mark };
+    let record = ModelMark {
+        model_sha: args.model_sha, first_scribe: scribe, first_birth: number, bump: ctx.bumps.model_mark, writer: args.model_writer,
+    };
     let mut data = mark.try_borrow_mut_data()?;
     let mut out: &mut [u8] = &mut data;
     record.try_serialize(&mut out)?;
-    Ok(true)
+    Ok(())
 }
 
 /// The instruction before this one must be an Ed25519 signature check of `message` by `verifier`,
@@ -292,6 +322,8 @@ pub struct Settings {
     /// Pubkey::default() until the token exists: verification is closed until then.
     pub burn_mint: Pubkey,
     pub burn_amount: u64,
+    /// Lamports each scribe pays to the owner of its model's Autograph scribe (at most MAX_MODEL_ROYALTY).
+    pub model_royalty: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -300,6 +332,8 @@ pub struct BirthArgs {
     pub manifest_size: u32,
     /// All zeros for a bound brain (no inscribed model).
     pub model_sha: [u8; 32],
+    /// The writer of the model copy the manifest names (the default key for a bound brain).
+    pub model_writer: Pubkey,
 }
 
 #[account]
@@ -313,16 +347,20 @@ pub struct Config {
     pub burn_amount: u64,
     pub births: u64,
     pub bump: u8,
+    pub model_royalty: u64,
 }
 
 impl Config {
-    fn apply(&mut self, s: Settings) {
+    fn apply(&mut self, s: Settings) -> Result<()> {
+        require!(s.model_royalty <= MAX_MODEL_ROYALTY, ScribeError::RoyaltyTooHigh);
         self.admin = s.admin;
         self.verifier = s.verifier;
         self.fee_receiver = s.fee_receiver;
         self.birth_fee = s.birth_fee;
         self.burn_mint = s.burn_mint;
         self.burn_amount = s.burn_amount;
+        self.model_royalty = s.model_royalty;
+        Ok(())
     }
 }
 
@@ -340,8 +378,10 @@ pub struct Scribe {
     pub verified: bool,
     pub verified_slot: u64,
     pub bump: u8,
+    pub model_writer: Pubkey,
 }
 
+/// One copy of an inscribed model (its sha256 under one writer) and its first scribe, the Autograph.
 #[account]
 #[derive(InitSpace)]
 pub struct ModelMark {
@@ -349,6 +389,7 @@ pub struct ModelMark {
     pub first_scribe: Pubkey,
     pub first_birth: u64,
     pub bump: u8,
+    pub writer: Pubkey,
 }
 
 #[derive(Accounts)]
@@ -379,14 +420,20 @@ pub struct Birth<'info> {
     pub writer: Signer<'info>,
     #[account(mut, seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
-    #[account(init, payer = owner, space = 8 + Scribe::INIT_SPACE, seeds = [b"scribe", args.manifest_sha.as_ref()], bump)]
+    #[account(init, payer = owner, space = 8 + Scribe::INIT_SPACE, seeds = [b"scribe", writer.key().as_ref(), args.manifest_sha.as_ref()], bump)]
     pub scribe: Account<'info, Scribe>,
-    /// CHECK: the model's record; created here for the first scribe using the model (address fixed by seeds).
-    #[account(mut, seeds = [b"model", args.model_sha.as_ref()], bump)]
+    /// CHECK: the model copy's record; created here for its first scribe (address fixed by seeds).
+    #[account(mut, seeds = [b"model", args.model_sha.as_ref(), args.model_writer.as_ref()], bump)]
     pub model_mark: UncheckedAccount<'info>,
     /// CHECK: must be the configured fee receiver.
     #[account(mut, address = config.fee_receiver @ ScribeError::WrongFeeReceiver)]
     pub fee_receiver: UncheckedAccount<'info>,
+    /// The model copy's Autograph scribe and its current owner, paid the royalty (checked in pay_royalty).
+    /// Needed only when the copy already has an Autograph and the royalty is above zero.
+    pub autograph_scribe: Option<Account<'info, Scribe>>,
+    /// CHECK: must be the Autograph scribe's owner (checked in pay_royalty).
+    #[account(mut)]
+    pub royalty_receiver: Option<UncheckedAccount<'info>>,
     pub system_program: Program<'info, System>,
 }
 
@@ -395,7 +442,7 @@ pub struct Verify<'info> {
     pub owner: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
-    #[account(mut, has_one = owner @ ScribeError::NotOwner, seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    #[account(mut, has_one = owner @ ScribeError::NotOwner, seeds = [b"scribe", scribe.writer.as_ref(), scribe.manifest_sha.as_ref()], bump = scribe.bump)]
     pub scribe: Account<'info, Scribe>,
     #[account(mut, address = config.burn_mint @ ScribeError::WrongMint)]
     pub mint: InterfaceAccount<'info, Mint>,
@@ -410,7 +457,7 @@ pub struct Verify<'info> {
 #[derive(Accounts)]
 pub struct Give<'info> {
     pub owner: Signer<'info>,
-    #[account(mut, has_one = owner @ ScribeError::NotOwner, seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    #[account(mut, has_one = owner @ ScribeError::NotOwner, seeds = [b"scribe", scribe.writer.as_ref(), scribe.manifest_sha.as_ref()], bump = scribe.bump)]
     pub scribe: Account<'info, Scribe>,
 }
 
@@ -445,7 +492,7 @@ pub struct SetMarket<'info> {
 pub struct List<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(has_one = owner @ ScribeError::NotOwner, seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    #[account(has_one = owner @ ScribeError::NotOwner, seeds = [b"scribe", scribe.writer.as_ref(), scribe.manifest_sha.as_ref()], bump = scribe.bump)]
     pub scribe: Account<'info, Scribe>,
     #[account(init_if_needed, payer = owner, space = 8 + Listing::INIT_SPACE, seeds = [b"listing", scribe.key().as_ref()], bump)]
     pub listing: Account<'info, Listing>,
@@ -455,7 +502,7 @@ pub struct List<'info> {
 #[derive(Accounts)]
 pub struct Cancel<'info> {
     pub signer: Signer<'info>,
-    #[account(seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    #[account(seeds = [b"scribe", scribe.writer.as_ref(), scribe.manifest_sha.as_ref()], bump = scribe.bump)]
     pub scribe: Account<'info, Scribe>,
     #[account(mut, close = seller, has_one = seller, seeds = [b"listing", scribe.key().as_ref()], bump = listing.bump)]
     pub listing: Account<'info, Listing>,
@@ -472,7 +519,7 @@ pub struct Buy<'info> {
     pub config: Account<'info, Config>,
     #[account(seeds = [b"market"], bump = market.bump)]
     pub market: Account<'info, Market>,
-    #[account(mut, seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    #[account(mut, seeds = [b"scribe", scribe.writer.as_ref(), scribe.manifest_sha.as_ref()], bump = scribe.bump)]
     pub scribe: Account<'info, Scribe>,
     #[account(mut, close = seller, has_one = seller, seeds = [b"listing", scribe.key().as_ref()], bump = listing.bump)]
     pub listing: Account<'info, Listing>,
@@ -512,7 +559,7 @@ pub struct AwardBounty<'info> {
     pub poster: Signer<'info>,
     #[account(mut, close = poster, has_one = poster @ ScribeError::NotPoster, seeds = [b"bounty", poster.key().as_ref(), &bounty.id.to_le_bytes()], bump = bounty.bump)]
     pub bounty: Account<'info, Bounty>,
-    #[account(seeds = [b"scribe", scribe.manifest_sha.as_ref()], bump = scribe.bump)]
+    #[account(seeds = [b"scribe", scribe.writer.as_ref(), scribe.manifest_sha.as_ref()], bump = scribe.bump)]
     pub scribe: Account<'info, Scribe>,
     /// CHECK: the scribe's current owner, who is paid (checked against the scribe).
     #[account(mut, address = scribe.owner @ ScribeError::NotOwner)]
@@ -585,6 +632,8 @@ pub struct Born {
     pub owner: Pubkey,
     pub birth_number: u64,
     pub autograph: bool,
+    /// Lamports paid to the model's Autograph owner.
+    pub royalty: u64,
 }
 
 #[event]
@@ -644,4 +693,12 @@ pub enum ScribeError {
     NotPoster,
     #[msg("The bounty is still open: it can be refunded after its deadline")]
     BountyStillOpen,
+    #[msg("A bound brain names no model writer")]
+    BadModel,
+    #[msg("The first scribe on a model must be born by the model's own writer")]
+    ModelNotYours,
+    #[msg("The royalty accounts are not the model's Autograph scribe and its owner")]
+    WrongAutograph,
+    #[msg("The model royalty can be at most 0.1 SOL")]
+    RoyaltyTooHigh,
 }

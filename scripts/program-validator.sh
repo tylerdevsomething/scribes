@@ -11,4 +11,4 @@ exec solana-test-validator --reset --quiet --ledger /tmp/scribes-program-check \
   --rpc-port 18999 --faucet-port 19990 --gossip-port 18991 --dynamic-port-range 19100-19200 \
   --url https://api.mainnet-beta.solana.com \
   --clone-upgradeable-program noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV \
-  --upgradeable-program E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq target/deploy/scribes.so "$AUTH"
+  --upgradeable-program 6BRHHJARif6TZJKjuJr8k7vFTr9gUxp7C5KaGMZBRBRD target/deploy/scribes.so "$AUTH"

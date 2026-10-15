@@ -244,6 +244,8 @@ export class Indexer {
       const m = decodeManifest(await this.load(e.manifest));
       const model = m.brain.kind === 'inscribed' ? m.brain.model : ZERO_SHA;
       if (model !== e.record.modelSha) throw new Error('the manifest names a different model than the birth record');
+      const copy = m.brain.kind === 'inscribed' ? m.files.find((f) => f.sha256 === model)?.writer : PublicKey.default.toBase58();
+      if (copy !== e.record.modelWriter) throw new Error('the manifest names a different copy of the model than the birth record');
       for (const f of m.files) e.files.set(f.sha256, this.collector(f));
       e.decoded = m;
     }

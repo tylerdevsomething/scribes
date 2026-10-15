@@ -10,7 +10,7 @@ if [ "${1:-devnet}" = localnet ]; then RPC=http://127.0.0.1:8899
 else RPC=$(tr -d '\r' < .env | sed -n 's/^RPC_DEVNET=//p'); fi
 [ -n "$RPC" ] || { echo "RPC_DEVNET missing from .env"; exit 1; }
 KEY=/mnt/c/Users/Admin/scribes-keys/writer-dev.json
-ID=$(solana address -k /mnt/c/Users/Admin/scribes-keys/program-scribes.json)
+ID=$(solana address -k /mnt/c/Users/Admin/scribes-keys/program-scribes-2.json)
 hide() { sed -E 's/api-key=[0-9a-f-]+/api-key=***/g'; }
 
 if solana program show "$ID" --url "$RPC" >/dev/null 2>&1; then
@@ -22,5 +22,5 @@ if solana program show "$ID" --url "$RPC" >/dev/null 2>&1; then
   fi
 fi
 solana program deploy --url "$RPC" --keypair "$KEY" \
-  --program-id /mnt/c/Users/Admin/scribes-keys/program-scribes.json \
+  --program-id /mnt/c/Users/Admin/scribes-keys/program-scribes-2.json \
   --with-compute-unit-price 10000 target/deploy/scribes.so 2>&1 | hide

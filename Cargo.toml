@@ -5,4 +5,5 @@ resolver = "2"
 [profile.release]
 overflow-checks = true
 lto = "fat"
+opt-level = "z" # smallest program: the deploy deposit scales with its size
 codegen-units = 1

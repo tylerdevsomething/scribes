@@ -8,7 +8,7 @@
 set -euo pipefail
 K="${KEY:-$HOME/scribes-keys/writer-dev.json}"
 R=http://127.0.0.1:8899
-until curl -s -X POST $R -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["E6BMZvTkKXnEF8dDfBBBmeBZptu2ZZUa66CJ1jvLpVmq",{"encoding":"base64","dataSlice":{"offset":0,"length":0}}]}' 2>/dev/null | grep -q executable; do sleep 2; done
+until curl -s -X POST $R -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["6BRHHJARif6TZJKjuJr8k7vFTr9gUxp7C5KaGMZBRBRD",{"encoding":"base64","dataSlice":{"offset":0,"length":0}}]}' 2>/dev/null | grep -q executable; do sleep 2; done
 G=$(curl -s -X POST $R -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"getGenesisHash"}' | sed -E 's/.*"result":"([^"]{12}).*/\1/')
 find .cache/journal -mindepth 1 -maxdepth 1 -type d ! -name EtWTRABZaYq6 -exec rm -rf {} +  # old local journals (keep devnet's)
 rm -rf .cache/indexer

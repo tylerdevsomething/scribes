@@ -135,7 +135,7 @@ export function readGguf(file: Uint8Array): GgufInfo {
   return {
     version,
     architecture: s('general.architecture'),
-    name: displayName(s('general.name'), s('general.basename'), s('general.size_label'), s('general.finetune')),
+    name: displayName(s('general.name'), s('general.basename'), s('general.size_label'), s('general.finetune'), s('general.architecture')),
     sizeLabel: s('general.size_label'),
     fileType: typeof meta['general.file_type'] === 'number' ? (meta['general.file_type'] as number) : null,
     tensorCount,
@@ -147,8 +147,8 @@ export function readGguf(file: Uint8Array): GgufInfo {
 // A readable model name. Prefers "base size [finetune]" when the file has them, since general.name is
 // often a training-run name ("Smollm2 360M 8k Lc100K Mix1 Ep2"); a finetune is kept only if it is a word.
 const CASING: Record<string, string> = { smollm: 'SmolLM', smollm2: 'SmolLM2', smollm3: 'SmolLM3', tinyllama: 'TinyLlama', llama: 'Llama', qwen: 'Qwen', phi: 'Phi', gemma: 'Gemma' };
-export function displayName(name: string | null, base: string | null, size: string | null, finetune: string | null): string | null {
-  if (!base || !size) return name;
+export function displayName(name: string | null, base: string | null, size: string | null, finetune: string | null, architecture: string | null = null): string | null {
+  if (!base || !size) return name && name !== architecture ? name : null; // a bare architecture is no name
   const b = CASING[base.toLowerCase()] ?? (base === base.toLowerCase() ? base[0].toUpperCase() + base.slice(1) : base);
   return [b, size, finetune && /^[A-Za-z]+$/.test(finetune) ? finetune : null].filter(Boolean).join(' ');
 }
