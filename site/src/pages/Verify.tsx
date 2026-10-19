@@ -8,6 +8,7 @@ import type { ScribeView } from '../api.ts';
 import { API, conn, explorer } from '../config.ts';
 import { sendInstructions, useWallet } from '../wallet.ts';
 import { useSettings, type Settings } from '../settings.ts';
+import { VerifiedMark } from '../Figure.tsx';
 
 const program = scribesProgram(conn);
 
@@ -46,7 +47,7 @@ export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
   if (s.verified) {
     return (
       <div className="panel verified">
-        <div className="panel-head"><h3>Verified</h3><span className="chip teal">✓ Verified</span></div>
+        <div className="panel-head"><h3>Verified</h3><VerifiedMark size={20} onGold /></div>
         <p className="muted" style={{ margin: 0 }}>{s.name} passed the bot's checks and its owner burned $SCRIBES to verify it{s.verifiedSlot ? ` at slot ${s.verifiedSlot.toLocaleString()}` : ''}. The badge stays with the scribe for ever, whoever holds it.</p>
       </div>
     );

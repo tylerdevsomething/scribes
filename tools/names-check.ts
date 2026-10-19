@@ -10,6 +10,7 @@ const BANNED = ['c2VxdWVudHM=', 'cHJvb2Y=', 'c3RyaWtl', 'ZW52ZWxvcGU=', 'dmF1bHQ
 const ALLOWED = [
   'isOnCurve', 'location.origin', 'remote add origin', 'push -u origin',
   'Cross-Origin-Opener-Policy', 'Cross-Origin-Embedder-Policy', 'cross-origin-resource-policy', 'crossOriginIsolated', 'same-origin', 'access-control-allow-origin', 'crossorigin',
+  'quadraticCurveTo', 'transform-origin', // canvas and CSS
 ];
 
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' })

@@ -13,6 +13,15 @@ interface Injected {
 
 type W = Window & { phantom?: { solana?: Injected }; solflare?: Injected; backpack?: Injected };
 
+// Each wallet's own icon, from the Wallet Standard registry (Phantom, Solflare and Backpack all register one).
+const icons: Record<string, string> = {};
+if (typeof window !== 'undefined') {
+  const api = { register: (...ws: { name: string; icon: string }[]) => { for (const w of ws) icons[w.name] = w.icon; return () => {}; } };
+  window.addEventListener('wallet-standard:register-wallet', ((e: CustomEvent<(a: typeof api) => void>) => e.detail(api)) as EventListener);
+  window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: api }));
+}
+export const walletIcon = (name: string): string | undefined => icons[name];
+
 export function wallets(): { name: string; provider: Injected }[] {
   const w = window as W;
   const out: { name: string; provider: Injected }[] = [];

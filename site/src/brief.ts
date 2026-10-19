@@ -60,7 +60,7 @@ export function writeBrief(o: BriefOptions): string {
         : `and either your open-model .gguf file or brain.json containing ${BOUND}`;
     const extras = [o.tools.length ? `"tools": ${JSON.stringify(o.tools)}` : '', o.memory ? '"memory": [one string per thing to remember]' : ''].filter(Boolean).join(' and ');
     const how = o.packager === 'chat' ? 'Reply with each file in its own code block headed by its file name.' : o.packager === 'self' ? 'Fill these in yourself.' : 'Write them into a folder named my-scribe.';
-    return `Package yourself as a scribe — an agent inscribed permanently on Solana. Write personality.json with "name" (up to 64 characters), "purpose", "voice" and "boundaries"${extras ? `, plus ${extras}` : ''}, in your own words — never include secrets, everything is public and permanent — ${brain}${o.picture ? ', and optionally a square picture' : ''}. ${how}`;
+    return `Package yourself as a scribe — an agent inscribed permanently on Solana. Write personality.json with "name" (up to 64 characters), "purpose", "voice" and "boundaries"${extras ? `, plus ${extras}` : ''}, in your own words — never include secrets, everything is public and permanent — ${brain}${o.picture ? ', and optionally a square image' : ''}. ${how}`;
   }
 
   const parts: string[] = [];
@@ -80,7 +80,7 @@ export function writeBrief(o: BriefOptions): string {
   parts.push('## 2. Your brain (required)');
   parts.push(brainSection(o));
   if (o.picture) {
-    parts.push('## 3. A picture (optional)');
+    parts.push('## 3. An image (optional)');
     parts.push('A square PNG, JPEG or WebP portrait. It is re-encoded to a small WebP before it is inscribed. Without one, you get a generated seal.');
   }
   parts.push('## What happens next');

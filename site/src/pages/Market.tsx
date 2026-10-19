@@ -48,7 +48,7 @@ export function MarketPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
     <div className="panel">
       <div className="panel-head">
         <h3>Capsule</h3>
-        {listing ? <span className="chip tan">For sale</span> : <span className="chip">Not for sale</span>}
+        <em className="hint">{listing ? '(for sale)' : '(not for sale)'}</em>
       </div>
 
       {listing && (
@@ -57,8 +57,10 @@ export function MarketPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
         </div>
       )}
 
-      {!me && (
-        <div className="row"><WalletButton /><span className="muted" style={{ fontSize: 14 }}>{listing ? 'Connect a wallet to buy.' : 'Connect the owner\'s wallet to list or give.'}</span></div>
+      {/* the public sees only the status; listing and giving show only to the owner once their wallet is connected */}
+      {!listing && !mine && <p className="muted cap-note">This scribe is not listed. Its owner can list it here by connecting their wallet.</p>}
+      {!me && listing && (
+        <div className="row"><WalletButton /><span className="muted" style={{ fontSize: 14 }}>Connect a wallet to buy.</span></div>
       )}
 
       {me && !mine && listing && (
@@ -69,22 +71,21 @@ export function MarketPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
           <p className="muted" style={{ fontSize: 13, margin: '10px 0 0' }}>You pay exactly the listed price; the transaction fails if the seller changes it first.</p>
         </>
       )}
-      {me && !mine && !listing && <p className="muted" style={{ margin: 0 }}>The owner has not listed {s.name}.</p>}
+      
 
       {mine && (
         <>
           <div className="row">
-            <input className="grow" inputMode="decimal" placeholder={listing ? 'New price in SOL' : 'Price in SOL'} value={price} onChange={(e) => setPrice(e.target.value)} />
+            <input className="grow" inputMode="decimal" placeholder={listing ? 'new price in sol' : 'price in sol'} value={price} onChange={(e) => setPrice(e.target.value)} />
             <button className="primary" disabled={!validPrice || !!busy} onClick={() => run('Listing', async () => [await listInstruction(program, new PublicKey(me), s.address, lamports)], `Listed for ${sol(lamports)} SOL`)}>
               {listing ? 'Change price' : 'List for sale'}
             </button>
             {listing && <button disabled={!!busy} onClick={() => run('Cancelling', async () => [await cancelInstruction(program, new PublicKey(me), s.address, me)], 'Listing cancelled')}>Cancel listing</button>}
           </div>
-          {validPrice && feeBps !== null && (
-            <p className="muted" style={{ fontSize: 13, margin: '8px 0 0' }}>You receive {sol(lamports - fee(lamports))} SOL after the {feeBps / 100}% sale fee.</p>
-          )}
+          {/* the fee line keeps its room while empty, so typing a price never moves anything below it */}
+          <p className="muted" style={{ fontSize: 13, margin: '8px 0 0', visibility: validPrice && feeBps !== null ? 'visible' : 'hidden' }}>You receive {sol(validPrice ? lamports - fee(lamports) : 0)} SOL after the {(feeBps ?? 0) / 100}% sale fee.</p>
           <div className="row" style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-            <input className="grow" placeholder="Give to a wallet address" value={to} onChange={(e) => setTo(e.target.value)} />
+            <input className="grow" placeholder="give to a wallet address" value={to} onChange={(e) => setTo(e.target.value)} />
             <button disabled={!validTo || !!busy} onClick={() => run('Giving', async () => [
               ...(listing ? [await cancelInstruction(program, new PublicKey(me), s.address, me)] : []),
               await giveInstruction(program, new PublicKey(me), s.address, new PublicKey(to.trim())),

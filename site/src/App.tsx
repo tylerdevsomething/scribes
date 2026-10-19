@@ -6,7 +6,7 @@ import { Create } from './pages/Create.tsx';
 import { BriefPage } from './pages/Brief.tsx';
 import { Me } from './pages/Me.tsx';
 import { BountiesPage, BountyPage } from './pages/Bounties.tsx';
-import { BOUNTIES, CLUSTER } from './config.ts';
+import { BOUNTIES } from './config.ts';
 import { Mark } from './Sigil.tsx';
 import { WalletButton } from './WalletButton.tsx';
 import { ModelsPage } from './pages/Models.tsx';
@@ -46,22 +46,31 @@ export function App() {
   else if (parts[0] === 'bounties' || parts[0] === 'bounty') page = BOUNTIES
     ? (parts[1] ? <BountyPage key={parts[1]} address={parts[1]} /> : <BountiesPage />)
     : <div className="prose"><div className="notice info">Bounties are paused for now. <a href="#/">Back to the scribes</a></div></div>;
-  else page = <Gallery />;
-  const on = (p: string) => ((parts[0] ?? '') === p || (p === '' && parts[0] === 'scribe') ? 'on' : '');
+  else if (parts[0] === 'explore') page = <Gallery key="explore" mode="explore" />;
+  else page = <Gallery key="home" />;
+  const on = (p: string) => ((parts[0] ?? '') === p ? 'on' : '');
+  // On the home page the hero is the whole first screen: the nav stays out of sight until you scroll past it.
+  const home = !parts[0] || parts[0] === 'explore';
+  const [past, setPast] = useState(false);
+  useEffect(() => {
+    const check = () => setPast(window.scrollY > window.innerHeight * .75);
+    check(); addEventListener('scroll', check, { passive: true });
+    return () => removeEventListener('scroll', check);
+  }, []);
   return (
     <>
-      <header className="top">
+      <header className={`top${home ? (past ? ' home in' : ' home') : ''}`}>
         <div className="wrap">
-          <a className="brand" href="#/"><Mark /><b>Scribes</b></a>
+          <a className="brand" href="#/" aria-label="scribes"><img src="/favicon.svg?v=3" width={34} height={34} alt="" /></a>
           <nav className="main">
-            <a className={on('')} href="#/">Explore</a>
+            <a className={on('')} href="#/">Overview</a>
+            <a className={on('explore') || on('scribe')} href="#/explore">Browse</a>
             <a className={on('create')} href="#/create">Inscribe</a>
             <a className={on('models')} href="#/models">Models</a>
             {BOUNTIES && <a className={on('bounties') || on('bounty')} href="#/bounties">Bounties</a>}
             <a className={on('brief')} href="#/brief">Brief</a>
             <a className={on('me')} href="#/me">My scribes</a>
           </nav>
-          {CLUSTER !== 'mainnet' && <span className="net">{CLUSTER}</span>}
           <WalletButton />
         </div>
       </header>
@@ -74,7 +83,7 @@ export function App() {
           </div>
           <div className="foot-links">
             <b>Scribes</b>
-            <a href="#/">Explore</a>
+            <a href="#/explore">Explore</a>
             <a href="#/models">Inscribed models</a>
             {BOUNTIES && <a href="#/bounties">Bounties</a>}
           </div>

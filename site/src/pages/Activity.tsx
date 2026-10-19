@@ -1,7 +1,8 @@
 // The activity feed: births, verifications, listings, sales and gifts, newest first.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { API, explorer, short, sol } from '../config.ts';
 import type { ScribeView } from '../api.ts';
+import { Loading } from '../Loading.tsx';
 
 type Entry =
   | { kind: 'born'; scribe: string; owner: string; birthNumber: number; autograph: boolean }
@@ -36,20 +37,21 @@ export function useActivity(scribe?: string, limit = 12): Row[] | null {
   return rows;
 }
 
-function describe(e: Entry, name: string): string {
+// Addresses go in <code> so the lowercase site leaves their case alone.
+function describe(e: Entry, name: ReactNode): ReactNode {
   switch (e.kind) {
-    case 'born': return `${name} was born as #${e.birthNumber + 1}${e.autograph ? ' with the Autograph' : ''}`;
-    case 'verified': return `${name} was verified`;
-    case 'listed': return `${name} listed for ${sol(e.price)} SOL`;
-    case 'unlisted': return `${name} taken off sale`;
-    case 'sold': return `${name} sold for ${sol(e.price)} SOL`;
-    case 'given': return `${name} given to ${short(e.to)}`;
-    case 'bounty_awarded': return `${name} won a ${sol(e.reward)} SOL bounty`;
+    case 'born': return <>{name} was born as #{e.birthNumber + 1}{e.autograph ? ' with the Autograph' : ''}</>;
+    case 'verified': return <>{name} was verified</>;
+    case 'listed': return <>{name} listed for {sol(e.price)} SOL</>;
+    case 'unlisted': return <>{name} taken off sale</>;
+    case 'sold': return <>{name} sold for {sol(e.price)} SOL</>;
+    case 'given': return <>{name} given to <code>{short(e.to)}</code></>;
+    case 'bounty_awarded': return <>{name} won a {sol(e.reward)} SOL bounty</>;
   }
 }
 
 export function ActivityList({ rows, names, compact }: { rows: Row[] | null; names: Map<string, string>; compact?: boolean }) {
-  if (!rows) return <div className="muted" style={{ fontSize: 14 }}>Loading…</div>;
+  if (!rows) return <Loading />;
   if (rows.length === 0) return <div className="muted" style={{ fontSize: 14 }}>Nothing yet.</div>;
   return (
     <ul className="feed">
@@ -57,7 +59,7 @@ export function ActivityList({ rows, names, compact }: { rows: Row[] | null; nam
         <li key={`${e.signature}-${e.kind}`} className={e.kind}>
           <i>{ICON[e.kind]}</i>
           <span className="what">
-            {compact ? describe(e, names.get(e.scribe) ?? 'It') : <a href={`#/scribe/${e.scribe}`}>{describe(e, names.get(e.scribe) ?? short(e.scribe))}</a>}
+            {compact ? describe(e, names.get(e.scribe) ?? 'It') : <a href={`#/scribe/${e.scribe}`}>{describe(e, names.get(e.scribe) ?? <code>{short(e.scribe)}</code>)}</a>}
           </span>
           <a className="when" href={explorer('tx', e.signature)} target="_blank" rel="noreferrer">{ago(e.time, e.slot)}</a>
         </li>

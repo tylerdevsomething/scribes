@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Transaction } from '@solana/web3.js';
-import { checkUpload, checkout, newUpload, putPart, submitted, uploadStatus, type CheckReport, type UploadPhase } from '../api.ts';
-import { API, conn, explorer, sol } from '../config.ts';
+import { checkUpload, checkout, getScribe, newUpload, putPart, submitted, uploadStatus, type CheckReport, type ScribeView, type UploadPhase } from '../api.ts';
+import { VerifyPanel, tokens } from './Verify.tsx';
+import { VerifiedMark } from '../Figure.tsx';
+import { API, CLUSTER, conn, explorer, sol } from '../config.ts';
 import { connect, signTransaction, useWallet, wallets } from '../wallet.ts';
 import { Sigil } from '../Sigil.tsx';
+import { Folio } from '../Hero.tsx';
+import { Figure } from '../Figure.tsx';
 import { ToolPicker } from '../ToolPicker.tsx';
 
 type Part = 'personality' | 'model' | 'model-ref' | 'brain' | 'picture';
@@ -18,9 +22,13 @@ const CLAUDE_MODELS = [
 
 import type { ModelInfo } from './Models.tsx';
 import { useSettings } from '../settings.ts';
+import { DEFAULT_BRIEF, writeBrief } from '../brief.ts';
+import { Loading } from '../Loading.tsx';
 
 export function Create({ model }: { model?: string } = {}) {
-  const [mode, setMode] = useState<'write' | 'upload'>('write');
+  const [path, setPath] = useState<Path>('model');
+  // verifying needs a born scribe, so it is chosen here and offered once the birth is done
+  const [verifyAfter, setVerifyAfter] = useState(true);
   const [parts, setParts] = useState<Parts | null>(null); // set when the user asks for a check
   const [id, setId] = useState<string | null>(null);
   const [report, setReport] = useState<CheckReport | null>(null);
@@ -49,38 +57,51 @@ export function Create({ model }: { model?: string } = {}) {
     }
   }
 
-  const stage = phase ? 3 : report?.ok ? 2 : 1;
   return (
-    <div className="prose" style={{ maxWidth: 900 }}>
-      <div className="eyebrow">Inscribe</div>
-      <h1>Bring a scribe to life</h1>
-      <p className="muted" style={{ fontSize: 17 }}>Write one here in a minute, or drop the folder your agent packaged with the <a href="#/brief">scribe brief</a>.</p>
-
-      <div className="stepper">
-        <div className={stage === 1 ? 'on' : 'done'}><i>{stage > 1 ? '✓' : 1}</i>Describe it</div>
-        <div className={stage === 2 ? 'on' : stage > 2 ? 'done' : ''}><i>{stage > 2 ? '✓' : 2}</i>Check &amp; sign</div>
-        <div className={stage === 3 ? (phase?.phase === 'done' ? 'done' : 'on') : ''}><i>{phase?.phase === 'done' ? '✓' : 3}</i>Inscribed</div>
+    <Folio className="folio-hero stage">
+      <div className="scene scene-explore-head"><h1 className="hero-title">inscribe an ai agent</h1></div>
+      <div className="scene scene-create">
+        <div className="create-col">
+          {!phase && (
+            <>
+              {path === 'folder'
+                ? <Uploader busy={!!busy} onCheck={check} ways={<Ways path={path} onPath={setPath} />} verify={verifyAfter} onVerify={setVerifyAfter} />
+                : <Builder key={path} own={path === 'own'} model={model} busy={!!busy} onCheck={check} verify={verifyAfter} onVerify={setVerifyAfter} ways={<Ways path={path} onPath={setPath} />} />}
+            </>
+          )}
+          {busy && !report && <Loading text={busy} />}
+          {error && <div className="notice bad" style={{ marginTop: 16 }}>{error}</div>}
+          {report && !phase && parts && <Report report={report} id={id!} onPhase={setPhase} />}
+          {phase && <Progress phase={phase} id={id!} onPhase={setPhase} verify={verifyAfter} />}
+        </div>
       </div>
+    </Folio>
+  );
+}
 
-      {!phase && (
-        <>
-          <div className="seg" style={{ marginBottom: 18 }}>
-            <button className={mode === 'write' ? 'on' : ''} onClick={() => setMode('write')}>Write it here</button>
-            <button className={mode === 'upload' ? 'on' : ''} onClick={() => setMode('upload')}>Upload files</button>
-          </div>
-          {mode === 'write' ? <Builder model={model} busy={!!busy} onCheck={check} /> : <Uploader busy={!!busy} onCheck={check} />}
-        </>
-      )}
-
-      {busy && !report && <p className="muted" style={{ marginTop: 14 }}>{busy}…</p>}
-      {error && <div className="notice bad" style={{ marginTop: 16 }}>{error}</div>}
-      {report && !phase && parts && <Report report={report} id={id!} onPhase={setPhase} />}
-      {phase && <Progress phase={phase} id={id!} onPhase={setPhase} />}
-    </div>
+// section 1, the ai model: three ways, the same size side by side
+type Path = 'model' | 'own' | 'folder';
+const PICKED = <svg className="picked" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect width="20" height="20" fill="currentColor" /><path d="M5 10.5l3.4 3.4L15 7.2" fill="none" stroke="var(--paper)" strokeWidth="2.6" strokeLinecap="square" /></svg>;
+function Ways({ path, onPath }: { path: Path; onPath: (p: Path) => void }) {
+  const way = (k: Path, t: string, d: string) => <button type="button" role="radio" aria-checked={path === k} className={`way-card${path === k ? ' on' : ''}`} onClick={() => onPath(k)}>{path === k && <i className="corner-tick" aria-hidden="true" />}<b>{t}</b><span>{d}</span></button>;
+  return (
+    <>
+      <h3 className="sec-head"><i>1</i>model<Info text="what your scribe thinks with. the first scribe born on an inscribed model holds that model's autograph and earns a royalty each time another scribe is born on it." /></h3>
+      <div className="way-cards" role="radiogroup" aria-label="model">
+        {way('model', 'already inscribed', 'a model on solana')}
+        {way('own', 'your own model', 'upload a .gguf')}
+        {way('folder', 'packaged folder', 'your agent can make one')}
+      </div>
+    </>
   );
 }
 
 // ---- write a scribe in the browser ----
+
+// The inscribed models are asked for once, as soon as the site opens, so the inscribe page has them ready
+let models_: Promise<ModelInfo[]> | null = null;
+export const modelList = () => (models_ ??= fetch(`${API}/models`).then((r) => r.json()).catch((e) => { models_ = null; throw e; }));
+if (typeof window !== 'undefined') modelList().catch(() => {});
 
 const params = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)}M`);
 // A plain-words idea of what a model of this size is good for.
@@ -90,31 +111,34 @@ function modelHint(n: number): string {
   return 'The best on-chain brain so far: follows instructions, holds a conversation.';
 }
 
-function Builder({ model, busy, onCheck }: { model?: string; busy: boolean; onCheck: (p: Parts) => void }) {
+function Builder({ own: ownPath, model, busy, onCheck, verify, onVerify, ways }: { own: boolean; model?: string; busy: boolean; onCheck: (p: Parts) => void; verify: boolean; onVerify: (v: boolean) => void; ways: ReactNode }) {
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [voice, setVoice] = useState('');
   const [boundaries, setBoundaries] = useState('');
   const [memory, setMemory] = useState('');
   const [tools, setTools] = useState<string[]>([]);
-  const [brain, setBrain] = useState<'existing' | 'claude' | 'own'>('existing');
+  const [brain, setBrain] = useState<'existing' | 'claude' | 'own'>(ownPath ? 'own' : 'existing');
   const [models, setModels] = useState<ModelInfo[] | null>(null);
   const [modelSha, setModelSha] = useState('');
   const [claude, setClaude] = useState(CLAUDE_MODELS[0].id);
   const [own, setOwn] = useState<File | null>(null);
   const [picture, setPicture] = useState<File | null>(null);
+  const [extra, setExtra] = useState(false);
+  const [hot, setHot] = useState(false);
+  const pic = useRef<HTMLInputElement>(null);
   const [pictureUrl, setPictureUrl] = useState('');
 
   useEffect(() => {
     // No inscribed models to reuse (or no answer): start on Claude instead of a disabled choice.
-    fetch(`${API}/models`).then((r) => r.json()).then((l: ModelInfo[]) => {
+    modelList().then((l: ModelInfo[]) => {
       // Largest first: the most capable model is the default (or the one asked for in the link).
       const sorted = [...l].sort((a, b) => b.parameters - a.parameters);
       setModels(sorted);
       const pick = sorted.find((m) => m.sha256 === model) ?? sorted[0];
-      if (pick) setModelSha(pick.sha256); else setBrain('claude');
+      if (pick) setModelSha(pick.sha256);
     })
-      .catch(() => { setModels([]); setBrain('claude'); });
+      .catch(() => setModels([]));
   }, []);
   useEffect(() => {
     if (!picture) { setPictureUrl(''); return; }
@@ -140,93 +164,148 @@ function Builder({ model, busy, onCheck }: { model?: string; busy: boolean; onCh
     onCheck(p);
   }
 
-  const chosen = models?.find((m) => m.sha256 === modelSha);
-  const royalty = (useSettings() as { modelRoyalty?: number } | null)?.modelRoyalty;
+  const settings = useSettings();
+  const [left, setLeft] = useState<string[]>([]);
+  const state = (k: string, v: string) => (v.trim() ? 'filled' : left.includes(k) ? 'missing' : '');
+  const leave = (k: string) => () => setLeft((l) => (l.includes(k) ? l : [...l, k]));
+  const split = (n: string) => { const m = /^(\S*?)[\s-]+(.*)$/.exec(n); return m ? [m[1], m[2]] : [n, '']; };
+  const TICK = <svg className="picked" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect width="20" height="20" fill="currentColor" /><path d="M5 10.5l3.4 3.4L15 7.2" fill="none" stroke="var(--paper)" strokeWidth="2.6" strokeLinecap="square" /></svg>;
+  const Sec = ({ n, t, info }: { n: number; t: string; info?: string }) => <h3 className="sec-head"><i>{n}</i>{t}{info && <Info text={info} />}</h3>;
   return (
     <div className="builder">
       <div className="form">
-        <label className="field"><span>Name</span>
-          <input maxLength={64} placeholder="e.g. Mott" value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="field"><span>Purpose <em>what it is for</em></span>
-          <textarea rows={2} maxLength={4000} placeholder="Keeps the lighthouse burning and tells visitors about the sea." value={purpose} onChange={(e) => setPurpose(e.target.value)} />
-        </label>
-        <label className="field"><span>Voice <em>how it talks</em></span>
-          <textarea rows={2} maxLength={4000} placeholder="Short, salty sentences. Distrusts anything shiny. Secretly kind." value={voice} onChange={(e) => setVoice(e.target.value)} />
-        </label>
-        <label className="field"><span>Boundaries <em>rules it never breaks</em></span>
-          <textarea rows={2} maxLength={4000} placeholder="Never gives financial advice. Never pretends to be a person." value={boundaries} onChange={(e) => setBoundaries(e.target.value)} />
-        </label>
-        <label className="field"><span>Memory <em>optional · one per line</em></span>
-          <textarea rows={2} placeholder="The storm of 1987." value={memory} onChange={(e) => setMemory(e.target.value)} />
-        </label>
-
-        <div className="field"><span>Brain <em>what it thinks with</em></span>
-          <div className="brains">
-            {models === null && <div className="brain-card skeleton" />}
-            {models?.map((m) => (
-              <button type="button" key={m.sha256} className={`brain-card chain${brain === 'existing' && modelSha === m.sha256 ? ' on' : ''}`} onClick={() => { setBrain('existing'); setModelSha(m.sha256); }}>
-                <span className="brain-seal"><Sigil seed={m.firstScribe} letter={(m.name ?? m.fileName)[0].toUpperCase()} /></span>
-                <span className="brain-tag">On-chain model</span>
-                <b>{m.name ?? m.fileName}</b>
-                <span className="brain-size">{params(m.parameters)} parameters · {size(m.size)}</span>
-                <span className="brain-hint">{modelHint(m.parameters)}</span>
-                <span className="brain-meta">Already on Solana · used by {m.scribes}{royalty ? ` · ${sol(royalty)} SOL royalty` : ''}</span>
-              </button>
-            ))}
-            <button type="button" className={`brain-card claude${brain === 'claude' ? ' on' : ''}`} onClick={() => setBrain('claude')}>
-              <span className="brain-seal glyph-claude">✳</span>
-              <span className="brain-tag">Bound brain</span>
-              <b>Claude</b>
-              <span className="brain-size">Smartest · uses tools</span>
-              <span className="brain-hint">Only the choice of model is inscribed. Visitors talk free each day, or with their own key.</span>
-            </button>
-            <button type="button" className={`brain-card own${brain === 'own' ? ' on' : ''}`} onClick={() => setBrain('own')}>
-              <span className="brain-seal glyph-own">+</span>
-              <span className="brain-tag">New model</span>
-              <b>Upload my own</b>
-              <span className="brain-size">An open .gguf you may share</span>
-              <span className="brain-hint">Written to Solana byte by byte (about 0.005 SOL per MB). The first scribe on it holds its Autograph.</span>
-            </button>
-          </div>
-          {models?.length === 0 && <p className="muted" style={{ fontSize: 13.5 }}>No models are inscribed yet; be the first.</p>}
-          {brain === 'claude' && (
-            <div className="seg claude-pick">
-              {CLAUDE_MODELS.map((m) => <button type="button" key={m.id} className={claude === m.id ? 'on' : ''} onClick={() => setClaude(m.id)}><b>{m.short}</b> <span>{m.hint}</span></button>)}
+        {ways}
+        {ownPath ? (
+          <label className={`pic-drop${own ? ' filled' : ''}`}>
+            <b>{own ? own.name.toLowerCase() : 'drop your .gguf model here, or click to choose'}</b>
+            <span>{own ? `${size(own.size).toLowerCase()}, click to choose another` : 'an open model you are free to share'}</span>
+            <input type="file" hidden accept=".gguf" onChange={(e) => setOwn(e.target.files?.[0] ?? null)} />
+          </label>
+        ) : (
+          <>
+            <div className="model-row">
+              {/* the tiles keep their places while the models load, so nothing jumps in later */}
+              {!models && [0, 1, 2].map((i) => <button type="button" key={i} className="ghost" disabled aria-hidden="true"><b>&nbsp;</b><small>&nbsp;</small></button>)}
+              {models?.map((m) => {
+                const [t, rest] = split((m.name ?? m.fileName).toLowerCase()), on = brain === 'existing' && modelSha === m.sha256;
+                return <button type="button" key={m.sha256} className={on ? 'on' : ''} onClick={() => { setBrain('existing'); setModelSha(m.sha256); }}>{on && <i className="corner-tick" aria-hidden="true" />}<b>{t}</b><small>{rest || size(m.size).toLowerCase()}</small></button>;
+              })}
             </div>
-          )}
-          {brain === 'own' && <input type="file" accept=".gguf" style={{ marginTop: 10 }} onChange={(e) => setOwn(e.target.files?.[0] ?? null)} />}
-        </div>
+          </>
+        )}
 
-        <div className="field"><span>Tools <em>{brain === 'claude' ? 'what it can use' : 'used when the brain is Claude'}</em></span>
-          <ToolPicker value={tools} onChange={setTools} />
+        <Sec n={2} t="details" />
+        <div className="row2">
+          <label className={`field ${state('name', name)}`}><span>name <em>(what people call it)</em></span>
+            <input maxLength={64} placeholder="waymark" value={name} onChange={(e) => setName(e.target.value)} onBlur={leave('name')} />
+          </label>
+          <label className={`field ${state('purpose', purpose)}`}><span>purpose <em>(what it is for)</em></span>
+            <input maxLength={4000} placeholder="maps any solana wallet and explains where its tokens came from" value={purpose} onChange={(e) => setPurpose(e.target.value)} onBlur={leave('purpose')} />
+          </label>
         </div>
-
-        <label className="field"><span>Picture <em>optional · re-encoded to a small WebP</em></span>
-          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setPicture(e.target.files?.[0] ?? null)} />
+        <label className={`field ${state('voice', voice)}`}><span>voice <em>(how it talks)</em></span>
+          <textarea rows={2} maxLength={4000} placeholder="clear and friendly, short answers, shows the numbers" value={voice} onChange={(e) => setVoice(e.target.value)} onBlur={leave('voice')} />
+        </label>
+        <label className={`field ${state('boundaries', boundaries)}`}><span>boundaries <em>(rules it never breaks)</em></span>
+          <textarea rows={2} maxLength={4000} placeholder="never asks for a seed phrase, never moves anyone's funds" value={boundaries} onChange={(e) => setBoundaries(e.target.value)} onBlur={leave('boundaries')} />
         </label>
 
-        <button className="primary" disabled={!ready || busy} onClick={submit}>Check my scribe</button>
-        {!ready && <span className="muted" style={{ fontSize: 13.5, marginLeft: 10 }}>Name, purpose, voice, boundaries and a brain.</span>}
+        <Sec n={3} t="image" />
+        <div className={`pic-drop${hot ? ' hot' : ''}${picture ? ' filled' : ''}`} onClick={() => pic.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setHot(true); }} onDragLeave={() => setHot(false)}
+          onDrop={(e) => { e.preventDefault(); setHot(false); const f = e.dataTransfer.files?.[0]; if (f) setPicture(f); }}>
+          {pictureUrl ? <><img className="pic-fill" src={pictureUrl} alt="" /><button type="button" className="pic-clear" aria-label="Remove the image" onClick={(e) => { e.stopPropagation(); setPicture(null); if (pic.current) pic.current.value = ''; }} /></> : <><b>drop an image, or click to choose</b><span>optional</span></>}
+          <input ref={pic} type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => setPicture(e.target.files?.[0] ?? null)} />
+        </div>
+
+        <VerifyStep n={4} verify={verify} onVerify={onVerify} />
+
+        <div className="create-go">
+          <button className={`stamp go${ready ? ' ready' : ''}${verify ? ' gold' : ''}`} disabled={!ready || busy} onClick={submit}>inscribe</button>
+        </div>
       </div>
 
       <aside className="preview">
-        <div className="eyebrow">Preview</div>
-        <div className="card">
-          <div className="art">{pictureUrl ? <img src={pictureUrl} alt="" /> : <Sigil seed={name || 'scribe'} letter={(name.trim()[0] ?? '?').toUpperCase()} />}</div>
+        <div className="preview-label">preview</div>
+        <div className={`card${verify ? ' verified' : ''}`}>
+          <i className="card-rule" />
+          <div className="art">{pictureUrl ? <img src={pictureUrl} alt="" /> : <Figure seed="waymark" n={0} bare />}</div>
           <div className="body">
-            <div className="name">{name.trim() || 'Your scribe'}</div>
-            <div className="sub">{brain === 'claude' ? `Bound to ${claude}` : brain === 'existing' ? (chosen ? `${chosen.name ?? chosen.fileName}` : 'Inscribed model') : own ? own.name : 'Your model'}</div>
-            <div className="badges">
-              {brain !== 'claude' && <span className="chip teal">Fully on-chain</span>}
-              {tools.length > 0 && <span className="chip">{tools.length} tool{tools.length > 1 ? 's' : ''}</span>}
-            </div>
+            <div className="name">{(name.trim() || 'waymark').toLowerCase()}{verify && <VerifiedMark />}</div>
+            <div className="purpose-line">{(purpose.trim() || 'maps any solana wallet and explains where its tokens came from').toLowerCase()}</div>
           </div>
         </div>
-        {purpose.trim() && <p className="purpose" style={{ marginTop: 12 }}>{purpose.trim()}</p>}
-        <p className="muted" style={{ fontSize: 13 }}>Everything you write here is public and permanent. Never include secrets.</p>
       </aside>
     </div>
+  );
+}
+
+// stand in minimum until the real token launches: devnet's config burns 10 of a test mint, which means
+// nothing beside a 1 billion supply. On mainnet the program's set amount is the minimum
+const DEFAULT_BURN = 100_000;
+
+// the verify step: an on and off switch, gold when on, and how many $scribes to burn, never less than the
+// minimum. The amount's room is always kept, so nothing below it moves when the switch flips
+function VerifyStep({ n, verify, onVerify }: { n: number; verify: boolean; onVerify: (v: boolean) => void }) {
+  const settings = useSettings();
+  const min = CLUSTER === 'mainnet' && settings?.burnAmount ? Number(tokens(settings.burnAmount, settings).replace(/,/g, '')) : DEFAULT_BURN;
+  // the box holds exactly what was typed; below the minimum it snaps back once you leave it
+  const [burn, setBurn] = useState<string | null>(null);
+  const typed = burn ?? String(min);
+  const amount = Number(typed) || 0;
+  return (
+    <>
+      <h3 className="sec-head"><i>{n}</i><span className="gold-text">verify</span><VerifiedMark size={18} /><Info text="you pay in two parts. first the inscription fee in sol, shown in full before you sign. then, once your scribe is born, the verification bot runs it and checks every file, and you burn your chosen amount of $scribes in a second signature. the record is marked verified permanently and the burned tokens are gone for good." /></h3>
+      <button type="button" role="switch" aria-checked={verify} className={`verify-toggle${verify ? ' on' : ''}`} onClick={() => onVerify(!verify)}>
+        <span className="switch" aria-hidden="true" />
+        <span><b>verification <em>(every file checked against its hash, then shown first in browse)</em></b></span>
+      </button>
+      <div className={`burn-field${verify ? '' : ' off'}`} aria-hidden={!verify}>
+        <div className="amount-box">
+          <input inputMode="numeric" value={typed} tabIndex={verify ? 0 : -1} aria-label="$scribes to burn"
+            onChange={(e) => setBurn(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            onBlur={() => setBurn(String(Math.min(Math.max(amount, min), 1e9)))} />
+          <span><img src="/favicon.svg?v=3" alt="" />$scribes</span>
+        </div>
+        <small className="burn-note">you burn {amount.toLocaleString()} $scribes in a second signature once your scribe is born. the minimum is {min.toLocaleString()}.<br />this is on top of the sol inscription fee.</small>
+      </div>
+    </>
+  );
+}
+
+// step 4, once the scribe exists: the verification panel on gold
+function AfterBirth({ address }: { address: string }) {
+  const [s, setS] = useState<ScribeView | null>(null);
+  const [n, setN] = useState(0);
+  useEffect(() => { getScribe(address).then(setS).catch(() => {}); }, [address, n]);
+  return (
+    <div style={{ marginTop: 22 }}>
+      <h3 className="sec-head"><i>4</i><span className="gold-text">verify</span><VerifiedMark size={18} /></h3>
+      {s ? <VerifyPanel s={s} onChange={() => setN((x) => x + 1)} /> : <Loading />}
+    </div>
+  );
+}
+
+// a small info mark beside a label: hover or tap it to read the note
+export function Info({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const pop = useRef<HTMLSpanElement>(null);
+  // keep the popup inside the frame's scrolling page (it clips anything past its edges), however narrow the window
+  useLayoutEffect(() => {
+    const el = pop.current;
+    if (!open || !el) return;
+    el.style.transform = '';
+    const box = (el.closest('.pf-dock, .folio-body') ?? document.body).getBoundingClientRect(); // inside the chat window when it is in one
+    const r = el.getBoundingClientRect();
+    const pad = 12;
+    const dx = r.right > box.right - pad ? box.right - pad - r.right : r.left < box.left + pad ? box.left + pad - r.left : 0;
+    if (dx) el.style.transform = `translateX(${dx}px)`;
+  }, [open]);
+  return (
+    <span className="info" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button type="button" aria-label="more about this" aria-expanded={open} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(true); }} onBlur={() => setOpen(false)}>i</button>
+      {open && <span ref={pop} className="info-pop" role="tooltip">{text}</span>}
+    </span>
   );
 }
 
@@ -241,7 +320,7 @@ function partOf(f: File): Part | null {
   return null;
 }
 
-function Uploader({ busy, onCheck }: { busy: boolean; onCheck: (p: Parts) => void }) {
+function Uploader({ busy, onCheck, ways, verify, onVerify }: { busy: boolean; onCheck: (p: Parts) => void; ways: ReactNode; verify: boolean; onVerify: (v: boolean) => void }) {
   const [files, setFiles] = useState<Parts>({});
   const [ignored, setIgnored] = useState<string[]>([]);
   const [hot, setHot] = useState(false);
@@ -256,26 +335,77 @@ function Uploader({ busy, onCheck }: { busy: boolean; onCheck: (p: Parts) => voi
   }
   const brainFile = files.model ?? files.brain;
   const ready = !!files.personality && !!brainFile;
+  const [copied, setCopied] = useState(false);
+  // the brief with an open model only: the inscribe form no longer offers claude
+  const brief = () => writeBrief({ ...DEFAULT_BRIEF, brain: 'open' });
+  const copyBrief = () => navigator.clipboard.writeText(brief()).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); });
+  const downloadBrief = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([brief()], { type: 'text/markdown' }));
+    a.download = 'scribe-brief.md';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  // the preview reads the folder's personality.json and image, so it sits top right just as on the other paths
+  const [who, setWho] = useState<{ name?: string; purpose?: string }>({});
+  const [imageUrl, setImageUrl] = useState('');
+  useEffect(() => {
+    if (!files.personality) { setWho({}); return; }
+    files.personality.text().then((t) => { try { const j = JSON.parse(t); setWho({ name: String(j.name ?? ''), purpose: String(j.purpose ?? '') }); } catch { setWho({}); } });
+  }, [files.personality]);
+  useEffect(() => {
+    if (!files.picture) { setImageUrl(''); return; }
+    const u = URL.createObjectURL(files.picture);
+    setImageUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [files.picture]);
   return (
-    <>
+    <div className="builder">
+      <div className="form">
+      {ways}
+      {/* step 2 is only the brief: get it and give it to your agent. step 3 is dropping in what it makes */}
+      <h3 className="sec-head"><i>2</i>the scribe brief</h3>
+      <div className="brief-get">
+        <p>download the scribe brief and give it to your ai agent. it writes personality.json and packs your scribe's folder.</p>
+        <div className="brief-buttons">
+          <button type="button" className="show-all on" onClick={downloadBrief}>download brief</button>
+          <button type="button" className={`show-all${copied ? ' on' : ''}`} onClick={copyBrief}>{copied && <i className="corner-tick" aria-hidden="true" />}{copied ? 'copied' : 'copy brief'}</button>
+          <a className="show-all brief-read" href="#/brief" target="_blank" rel="noopener">read brief</a>
+        </div>
+      </div>
+      <h3 className="sec-head"><i>3</i>your folder</h3>
       <div className={`drop ${hot ? 'hot' : ''}`} onClick={() => pickRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setHot(true); }} onDragLeave={() => setHot(false)}
         onDrop={(e) => { e.preventDefault(); setHot(false); add(e.dataTransfer.files); }}>
-        <div className="big">Drop your scribe's files here</div>
+        <div className="big">drop your scribe's files here</div>
         <div className="small">or click to choose them</div>
         <input ref={pickRef} type="file" multiple hidden onChange={(e) => e.target.files && add(e.target.files)} />
       </div>
-      <div className="slots">
-        <div className={`slot ${files.personality ? 'filled' : ''}`}><div className="k">Personality · required</div>{files.personality ? <div className="v">{files.personality.name}</div> : <div className="h">personality.json</div>}</div>
-        <div className={`slot ${brainFile ? 'filled' : ''}`}><div className="k">Brain · required</div>{brainFile ? <div className="v">{brainFile.name} <span className="h">{size(brainFile.size)}</span></div> : <div className="h">a .gguf model, or brain.json</div>}</div>
-        <div className={`slot ${files.picture ? 'filled' : ''}`}><div className="k">Picture · optional</div>{files.picture ? <div className="v">{files.picture.name}</div> : <div className="h">PNG, JPEG or WebP</div>}</div>
+      {/* what the folder must hold: red until it is there, blue once it is */}
+      <ul className="needs">
+        <li className={files.personality ? 'have' : 'must'}>personality.json{files.personality ? '' : ', required'}</li>
+        <li className={brainFile ? 'have' : 'must'}>{brainFile ? brainFile.name.toLowerCase() : 'a .gguf model, required'}</li>
+        <li className={`opt${files.picture ? ' have' : ''}`}>{files.picture ? files.picture.name.toLowerCase() : 'an image, optional'}</li>
+      </ul>
+      {ignored.length > 0 && <p className="sec-line">not used: {ignored.join(', ').toLowerCase()}</p>}
+      <VerifyStep n={4} verify={verify} onVerify={onVerify} />
+      <div className="create-go">
+        <button className={`stamp go${ready ? ' ready' : ''}${verify ? ' gold' : ''}`} disabled={!ready || busy} onClick={() => onCheck(files)}>inscribe</button>
       </div>
-      {ignored.length > 0 && <p className="muted" style={{ marginTop: 10, fontSize: 13.5 }}>Not used: {ignored.join(', ')}</p>}
-      <div className="row" style={{ marginTop: 18 }}>
-        <button className="primary" disabled={!ready || busy} onClick={() => onCheck(files)}>Check my scribe</button>
-        {!ready && <span className="muted" style={{ fontSize: 14 }}>Add a personality and a brain to continue.</span>}
       </div>
-    </>
+
+      <aside className="preview">
+        <div className="preview-label">preview</div>
+        <div className={`card${verify ? ' verified' : ''}`}>
+          <i className="card-rule" />
+          <div className="art">{imageUrl ? <img src={imageUrl} alt="" /> : <Figure seed="waymark" n={0} bare />}</div>
+          <div className="body">
+            <div className="name">{(who.name?.trim() || 'waymark').toLowerCase()}{verify && <VerifiedMark />}</div>
+            <div className="purpose-line">{(who.purpose?.trim() || 'maps any solana wallet and explains where its tokens came from').toLowerCase()}</div>
+          </div>
+        </div>
+      </aside>
+    </div>
   );
 }
 
@@ -344,9 +474,9 @@ function Report({ report, id, onPhase }: { report: CheckReport; id: string; onPh
             </tbody></table>
           )}
           <div className="row" style={{ marginTop: 18 }}>
-            {!owner && found.map((w) => <button key={w.name} className="primary" onClick={() => connect(w.provider).catch((e) => setError(e.message))}>Connect {w.name}</button>)}
+            {!owner && found.map((w) => <button key={w.name} className="stamp" onClick={() => connect(w.provider).catch((e) => setError(e.message))}>Connect {w.name}</button>)}
             {!owner && found.length === 0 && <div className="notice info">Install a Solana wallet (Phantom, Solflare or Backpack) to inscribe.</div>}
-            {owner && <button className="primary" disabled={!!busy} onClick={inscribe}>{busy ? `${busy}…` : `Inscribe for ${q && sol(q.totalLamports)} SOL`}</button>}
+            {owner && <button className="stamp" disabled={!!busy} onClick={inscribe}>{busy ? `${busy}…` : `Inscribe for ${q && sol(q.totalLamports)} SOL`}</button>}
           </div>
           <p className="muted" style={{ fontSize: 13.5, marginTop: 12, marginBottom: 0 }}>One signature. Once born, a scribe exists for ever — it can be given away, never deleted.</p>
         </>
@@ -356,7 +486,7 @@ function Report({ report, id, onPhase }: { report: CheckReport; id: string; onPh
   );
 }
 
-function Progress({ phase, id, onPhase }: { phase: UploadPhase; id: string; onPhase: (p: UploadPhase) => void }) {
+function Progress({ phase, id, onPhase, verify }: { phase: UploadPhase; id: string; onPhase: (p: UploadPhase) => void; verify: boolean }) {
   useEffect(() => {
     if (phase.phase === 'done' || phase.phase === 'failed') return;
     const t = setInterval(() => uploadStatus(id).then(onPhase).catch(() => {}), 1500);
@@ -379,6 +509,7 @@ function Progress({ phase, id, onPhase }: { phase: UploadPhase; id: string; onPh
             <a className="btn primary" href={`#/scribe/${phase.report.scribe}`}>Open {phase.report.name}</a>
             <a className="btn" href={explorer('tx', phase.signature)} target="_blank" rel="noreferrer">Birth transaction</a>
           </div>
+          {verify && phase.report.scribe && <AfterBirth address={phase.report.scribe} />}
         </>
       )}
       {phase.phase === 'failed' && <div className="notice bad">Inscription paused: {phase.error}. It resumes automatically; nothing you paid is lost.</div>}

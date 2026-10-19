@@ -6,3 +6,5 @@ dist/
 target/
 .anchor/
 test-ledger/
+scribes-frontend/
+site/vite.local.config.ts

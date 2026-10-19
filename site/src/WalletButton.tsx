@@ -1,27 +1,68 @@
-import { useState } from 'react';
-import { connect, disconnect, useWallet, wallets } from './wallet.ts';
+// Connect: a small framed menu under the button listing the wallets found in this browser. Each is a solid
+// blue option with its own icon redrawn in the page colour, so it sits in the site's two colours.
+import { useEffect, useState } from 'react';
+import { connect, disconnect, useWallet, walletIcon, wallets } from './wallet.ts';
 import { short } from './config.ts';
+
+const INSTALL = [
+  ['Phantom', 'https://phantom.com/download'],
+  ['Solflare', 'https://solflare.com/download'],
+  ['Backpack', 'https://backpack.app/download'],
+];
+
+// The wallet's icon with only its light shapes kept, filled in the page colour (Phantom's ghost, for one).
+function Glyph({ name }: { name: string }) {
+  const [src, setSrc] = useState('');
+  useEffect(() => {
+    const url = walletIcon(name);
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => {
+      const n = 64;
+      const c = Object.assign(document.createElement('canvas'), { width: n, height: n });
+      const g = c.getContext('2d')!;
+      g.drawImage(img, 0, 0, n, n);
+      const d = g.getImageData(0, 0, n, n);
+      for (let i = 0; i < d.data.length; i += 4) {
+        const light = Math.min(d.data[i], d.data[i + 1], d.data[i + 2]) > 225 && d.data[i + 3] > 128; // near white only, not a pale background
+        d.data[i] = 241; d.data[i + 1] = 241; d.data[i + 2] = 239; d.data[i + 3] = light ? 255 : 0;
+      }
+      g.putImageData(d, 0, 0);
+      setSrc(c.toDataURL());
+    };
+    img.src = url;
+  }, [name]);
+  return src ? <img src={src} alt="" /> : <i className="wallet-blank" />;
+}
 
 export function WalletButton() {
   const address = useWallet();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   if (address) {
-    return <button className="small" title="Disconnect" onClick={() => disconnect()}><span className="dot" />{short(address)}</button>;
+    return <button className="small" title="Disconnect" onClick={() => disconnect()}>{short(address)}</button>;
   }
   const found = wallets();
   return (
     <div className="menu-wrap">
-      <button className="small primary" onClick={() => setOpen(!open)}>Connect</button>
+      <button className="small primary" onClick={() => { setError(''); setOpen(!open); }}>Connect</button>
       {open && (
-        <div className="menu">
+        <div className="menu wallet-menu">
+          <i className="c2" />
+          {/* a chain link from the connect button down to the menu, like the links between blocks elsewhere */}
+          <i className="wallet-link" aria-hidden="true" />
           {found.map((w) => (
-            <button key={w.name} onClick={async () => {
+            <button key={w.name} type="button" onClick={async () => {
               try { await connect(w.provider); setOpen(false); } catch (e) { setError((e as Error).message); }
-            }}>{w.name}</button>
+            }}><Glyph name={w.name} /><span>{w.name}</span></button>
           ))}
-          {found.length === 0 && <div className="muted" style={{ fontSize: 13, padding: 8 }}>Install Phantom, Solflare or Backpack.</div>}
-          {error && <div className="bad" style={{ fontSize: 13, padding: 8 }}>{error}</div>}
+          {found.length === 0 && (
+            <>
+              <p>no solana wallet found. install one, then come back.</p>
+              {INSTALL.map(([n, u]) => <a key={n} href={u} target="_blank" rel="noreferrer"><span>{n}</span></a>)}
+            </>
+          )}
+          {error && <p className="wallet-error">{error}</p>}
         </div>
       )}
     </div>
