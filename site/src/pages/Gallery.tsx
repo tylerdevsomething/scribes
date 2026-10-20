@@ -6,14 +6,15 @@ import { Folio, HeroScene } from '../Hero.tsx';
 import { BirthRecord } from '../BirthRecord.tsx';
 import { HowItWorks } from '../HowItWorks.tsx';
 import { useActivity } from './Activity.tsx';
-import { API, explorer, modelName, short, sol } from '../config.ts';
+import { API, CLUSTER, explorer, modelName, short, sol } from '../config.ts';
 import { chunkCount } from '../../../lib/src/chunk.ts';
 import type { ModelInfo } from './Models.tsx';
 import { Loading, useHold } from '../Loading.tsx';
 import { RarityCube } from '../RarityCube.tsx';
 
 // the Coroner gives tokens a cause of death, so on the home page it is the grim reaper
-const CORONER = '4utJNkNtrFDKuXS9tq6Rqmwbk8L8LKRLhpPKCZ69PJu8';
+// (a devnet scribe: mainnet has none of them)
+const CORONER = CLUSTER === 'devnet' ? '4utJNkNtrFDKuXS9tq6Rqmwbk8L8LKRLhpPKCZ69PJu8' : '';
 // Scribes to show as verified for a design preview. Empty: only scribes verified on chain get the gold look.
 const SHOW_VERIFIED: string[] = [];
 export const isVerified = (s: ScribeView) => s.verified || SHOW_VERIFIED.includes(s.address);
