@@ -245,7 +245,7 @@ async function main() {
   } else if (cmd === 'token') {
     // Sets the token verification burns (e.g. $SCRIBE once it launches) and how many whole tokens it burns;
     // every other setting is kept as it is. With --key (the admin) it is sent; without, the admin is a multisig
-    // vault, so the transaction is printed in base58 for its import (Squads: TX Builder, import transaction).
+    // account (Squads), so the transaction is printed in base58 for its import (Squads: TX Builder, import transaction).
     const conn = new Connection(need(a, 'rpc'), 'confirmed');
     const program = scribesProgram(conn);
     const c = await readSettings(program);
