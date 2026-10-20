@@ -29,6 +29,7 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
+    "@sqds/multisig": "^2.1.4",
     "@types/node": "^24.19.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

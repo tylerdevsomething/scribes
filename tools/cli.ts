@@ -10,11 +10,12 @@
 //   node tools/cli.ts test-token --key <admin.json> --rpc <url> [--burn 10] [--verifier <pk>] [--mint <existing mint> | --mint-authority <pk>] [--to <pk> --amount 100]   (not mainnet)
 //   node tools/cli.ts give     --key <owner.json> --rpc <url> --scribe <address> --to <pk>
 //   node tools/cli.ts handover --key <admin.json> --rpc <url> --admin <pk> [--fee-receiver <pk>]   (settings stay as they are otherwise)
-//   node tools/cli.ts token    --rpc <url> --mint <token> --burn <whole tokens> [--key <admin.json>]   (no --key: prints the multisig's transaction)
+//   node tools/cli.ts token    --rpc <url> (--mint <token> | --creator <wallet> | --launch-tx <sig>) --burn <whole tokens>
+//                              [--key <admin.json> | --propose <member.json> --multisig <pk> [--dry-run]]   (neither: prints the multisig's transaction)
 //   (inscribe registers the scribe with the program at the end; --no-birth skips that)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, TransactionMessage, VersionedTransaction, sendAndConfirmTransaction, type TransactionInstruction } from '@solana/web3.js';
 import { fileTag, readFile, writeFile } from '../lib/src/chain.ts';
 import { chunkCount } from '../lib/src/chunk.ts';
 import { sha256Hex } from '../lib/src/bytes.ts';
@@ -25,6 +26,7 @@ import { runtimeFiles } from '../indexer/src/runtime.ts';
 import { ZERO_SHA, birthInstruction, giveInstruction, configAddress, marketAddress, readSettings, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, createMint, getMint, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
 import { utils } from '@coral-xyz/anchor';
+import * as multisig from '@sqds/multisig';
 
 function args(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -41,6 +43,63 @@ function need(a: Record<string, string>, k: string): string {
 }
 function loadKey(path: string): Keypair {
   return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(path, 'utf8'))));
+}
+
+// Sends instructions signed by one key and waits by asking for the status (a public RPC's confirm can report a
+// landed transaction as expired); fails only once the blockhash is past and the transaction is not there.
+async function land(conn: Connection, ixs: TransactionInstruction[], key: Keypair, dryRun = false): Promise<string> {
+  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
+  const tx = new VersionedTransaction(new TransactionMessage({ payerKey: key.publicKey, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message());
+  tx.sign([key]);
+  if (dryRun) {
+    const sim = await conn.simulateTransaction(tx, { sigVerify: true });
+    if (sim.value.err) throw new Error(`simulation failed: ${JSON.stringify(sim.value.err)}\n${(sim.value.logs ?? []).slice(-8).join('\n')}`);
+    return `simulated ok (${sim.value.unitsConsumed} compute units), nothing sent`;
+  }
+  const sig = await conn.sendTransaction(tx, { maxRetries: 20 });
+  for (;;) {
+    const st = (await conn.getSignatureStatuses([sig], { searchTransactionHistory: true })).value[0];
+    if (st?.err) throw new Error(`the transaction failed: ${JSON.stringify(st.err)}`);
+    if (st?.confirmationStatus === 'confirmed' || st?.confirmationStatus === 'finalized') return sig;
+    if ((await conn.getBlockHeight('confirmed')) > lastValidBlockHeight) throw new Error(`${sig} expired before it landed: run it again`);
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
+// Waits for a wallet to launch a pump.fun token: the first new transaction of the wallet's that leaves it holding a
+// mint ending in "pump" whose mint authority is gone (pump.fun drops it at launch).
+const PUMP = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
+async function launchedBy(conn: Connection, creator: PublicKey): Promise<PublicKey> {
+  let until = (await conn.getSignaturesForAddress(creator, { limit: 1 }))[0]?.signature;
+  console.log(`waiting for ${creator.toBase58()} to launch a pump.fun token…`);
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const sigs = await conn.getSignaturesForAddress(creator, { until, limit: 50 }).catch(() => []);
+    if (!sigs.length) continue;
+    until = sigs[0].signature;
+    for (const s of sigs.reverse().filter((x) => !x.err)) {
+      const m = await pumpMintIn(conn, s.signature);
+      if (m) { console.log(`launched: ${m.toBase58()} · ${s.signature}`); return m; }
+    }
+  }
+}
+// Asked for directly rather than through web3.js, which cannot read the newer transaction versions pump.fun
+// sends; only the meta (logs, token balances) is used, which every version has.
+async function pumpMintIn(conn: Connection, sig: string): Promise<PublicKey | null> {
+  const r = await fetch(conn.rpcEndpoint, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTransaction', params: [sig, { encoding: 'json', commitment: 'confirmed', maxSupportedTransactionVersion: 1 }] }),
+  }).then((x) => x.json()).catch(() => null);
+  const meta: { err: unknown; logMessages?: string[]; postTokenBalances?: { mint: string }[] } | undefined = r?.result?.meta;
+  // a launch, not a buy of some other coin: pump.fun's Create (or CreateV2) and the mint's InitializeMint in it
+  const logs = meta?.logMessages ?? [];
+  if (!meta || meta.err || !logs.some((l) => l.startsWith(`Program ${PUMP} invoke`))) return null;
+  if (!logs.some((l) => /^Program log: Instruction: Create(V2)?$/.test(l)) || !logs.some((l) => /InitializeMint2?$/.test(l))) return null;
+  for (const m of new Set((meta.postTokenBalances ?? []).map((b) => b.mint).filter((x) => x.endsWith('pump')))) {
+    const info = await conn.getAccountInfo(new PublicKey(m));
+    if (info && (await getMint(conn, new PublicKey(m), 'confirmed', info.owner)).mintAuthority === null) return new PublicKey(m);
+  }
+  return null;
 }
 
 
@@ -245,12 +304,16 @@ async function main() {
   } else if (cmd === 'token') {
     // Sets the token verification burns (e.g. $SCRIBE once it launches) and how many whole tokens it burns;
     // every other setting is kept as it is. With --key (the admin) it is sent; without, the admin is a multisig
-    // account (Squads), so the transaction is printed in base58 for its import (Squads: TX Builder, import transaction).
+    // account (Squads), so the transaction is printed in base58 for its import (Squads: TX Builder, import transaction),
+    // or with --propose <member.json> --multisig <pk> put straight into Squads as a proposal for the members to approve.
+    // --creator <wallet> in place of --mint: waits for that wallet to launch a pump.fun token and uses it.
     const conn = new Connection(need(a, 'rpc'), 'confirmed');
     const program = scribesProgram(conn);
     const c = await readSettings(program);
     const admin = (await program.account.config.fetch(configAddress())).admin;
-    const mint = new PublicKey(need(a, 'mint'));
+    const mint = a.creator ? await launchedBy(conn, new PublicKey(a.creator))
+      : a['launch-tx'] ? await pumpMintIn(conn, a['launch-tx']).then((m) => { if (!m) throw new Error('no pump.fun launch in that transaction'); return m; })
+      : new PublicKey(need(a, 'mint'));
     const info = await conn.getAccountInfo(mint);
     if (!info) throw new Error(`no account at ${mint.toBase58()}`);
     const { decimals, supply } = await getMint(conn, mint, 'confirmed', info.owner);
@@ -269,6 +332,25 @@ async function main() {
       if (!key.publicKey.equals(admin)) throw new Error(`--key is not the admin (${admin.toBase58()})`);
       const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
       console.log(`verification open · ${sig}`);
+    } else if (a.propose) {
+      const member = loadKey(a.propose);
+      const multisigPda = new PublicKey(need(a, 'multisig'));
+      const [signer] = multisig.getVaultPda({ multisigPda, index: 0 });
+      if (!signer.equals(admin)) throw new Error(`${multisigPda.toBase58()} signs as ${signer.toBase58()}, not the admin ${admin.toBase58()}`);
+      const ms = await multisig.accounts.Multisig.fromAccountAddress(conn, multisigPda);
+      const transactionIndex = BigInt(ms.transactionIndex.toString()) + 1n;
+      const { blockhash } = await conn.getLatestBlockhash('confirmed');
+      const ixs = [
+        multisig.instructions.vaultTransactionCreate({
+          multisigPda, transactionIndex, creator: member.publicKey, rentPayer: member.publicKey, vaultIndex: 0, ephemeralSigners: 0,
+          transactionMessage: new TransactionMessage({ payerKey: signer, recentBlockhash: blockhash, instructions: [ix] }),
+          memo: `scribes: verification burns ${BigInt(a.burn).toLocaleString()} of ${mint.toBase58()}`,
+        }),
+        multisig.instructions.proposalCreate({ multisigPda, transactionIndex, creator: member.publicKey, rentPayer: member.publicKey }),
+      ];
+      const sig = await land(conn, ixs, member, a['dry-run'] === 'true');
+      if (a['dry-run'] === 'true') console.log(`\nSquads transaction #${transactionIndex} · ${sig}`);
+      else console.log(`\nproposed in Squads as transaction #${transactionIndex} · ${sig}\nnow a member approves and executes it in the Squads app`);
     } else {
       const tx = new Transaction({ feePayer: admin, ...(await conn.getLatestBlockhash('confirmed')) }).add(ix);
       console.log(`\nfor the multisig (admin ${admin.toBase58()}), base58 transaction to import:\n${utils.bytes.bs58.encode(tx.serializeMessage())}`);

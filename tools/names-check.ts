@@ -8,7 +8,7 @@ const BANNED = ['c2VxdWVudHM=', 'cHJvb2Y=', 'c3RyaWtl', 'ZW52ZWxvcGU=', 'dmF1bHQ
 
 // Platform identifiers we cannot rename (third-party APIs). Keep this list short.
 const ALLOWED = [
-  'isOnCurve', 'location.origin', 'remote add origin', 'push -u origin',
+  'isOnCurve', 'getVaultPda', 'vaultTransactionCreate', 'vaultIndex', 'location.origin', 'remote add origin', 'push -u origin',
   'Cross-Origin-Opener-Policy', 'Cross-Origin-Embedder-Policy', 'cross-origin-resource-policy', 'crossOriginIsolated', 'same-origin', 'access-control-allow-origin', 'crossorigin',
   'quadraticCurveTo', 'transform-origin', // canvas and CSS
 ];
