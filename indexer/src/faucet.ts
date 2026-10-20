@@ -1,4 +1,4 @@
-// Test faucet for local and devnet testing: SOL (local validator only) and test $SCRIBES from the
+// Test faucet for local and devnet testing: SOL (local validator only) and test $SCRIBE from the
 // stand-in token mint (created with `node tools/cli.ts test-token`). Never enabled on mainnet.
 import { Connection, LAMPORTS_PER_SOL, PublicKey, type Keypair } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';

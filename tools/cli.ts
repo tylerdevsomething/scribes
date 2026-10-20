@@ -193,7 +193,7 @@ async function main() {
     const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
     console.log(`sale fee set to ${bps / 100}% · ${sig}`);
   } else if (cmd === 'test-token') {
-    // A stand-in for $SCRIBES on localnet/devnet: a Token-2022 mint (6 decimals) the admin can mint,
+    // A stand-in for $SCRIBE on localnet/devnet: a Token-2022 mint (6 decimals) the admin can mint,
     // set as the burn mint, so verification can be tested before the real token exists.
     const conn = new Connection(need(a, 'rpc'), 'confirmed');
     if ((await conn.getGenesisHash()) === '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d') throw new Error('not on mainnet');

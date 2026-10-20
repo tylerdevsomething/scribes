@@ -1,5 +1,5 @@
 // The verification bot. Its code is public; its only power is signing a pass, and the pass only counts
-// inside a verify transaction that also burns $SCRIBES (see programs/scribes). Two checks:
+// inside a verify transaction that also burns $SCRIBE (see programs/scribes). Two checks:
 //   1. Complete — every required piece is present and checked against the manifest, and an inscribed
 //      brain uses the official runtime.
 //   2. Working  — the scribe answers a fixed test prompt (an inscribed brain runs here, greedy decoding;

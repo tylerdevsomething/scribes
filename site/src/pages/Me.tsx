@@ -1,4 +1,4 @@
-// The connected wallet's scribes, its listings and its $SCRIBES balance (plus the test faucet off mainnet).
+// The connected wallet's scribes, its listings and its $SCRIBE balance (plus the test faucet off mainnet).
 import { useEffect, useState } from 'react';
 import { PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
@@ -39,7 +39,7 @@ export function Me() {
       const r = await fetch(`${API}/faucet`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: me }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
-      setDrip(`Sent ${j.sol ? `${j.sol} SOL and ` : ''}${j.tokens} test $SCRIBES.`);
+      setDrip(`Sent ${j.sol ? `${j.sol} SOL and ` : ''}${j.tokens} test $SCRIBE.`);
       await loadSettings(true);
       setTick((n) => n + 1);
     } catch (e) {
@@ -70,7 +70,7 @@ export function Me() {
         <div className="me-head">
           <div className="me-title">
             <h1 className="hero-title">my scribes</h1>
-            <p>The scribes your wallet holds, what you have listed for sale and your SOL and $SCRIBES balances. Open any scribe to run it, list it or give it away.</p>
+            <p>The scribes your wallet holds, what you have listed for sale and your SOL and $SCRIBE balances. Open any scribe to run it, list it or give it away.</p>
             {/* a search once there are more scribes than fit on one row */}
             {(list?.length ?? 0) > 5 && (
               <label className="browse-bar me-search"><i className="c2" />
@@ -86,7 +86,7 @@ export function Me() {
           <i className="stat-link" />
           <div className="stat"><i className="c2" /><b>{sol_ === null ? '0' : sol(sol_)}</b><span>sol</span></div>
           <i className="stat-link" />
-          <div className="stat"><i className="c2" /><b>{tok === null || !settings ? '0' : tokens(tok, settings)}</b><span>$scribes</span></div>
+          <div className="stat"><i className="c2" /><b>{tok === null || !settings ? '0' : tokens(tok, settings)}</b><span>$scribe</span></div>
           {/* the two columns joined top to bottom as well */}
           <i className="stat-link up left" /><i className="stat-link up right" />
         </div>
