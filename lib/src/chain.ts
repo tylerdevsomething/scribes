@@ -192,6 +192,7 @@ export interface WriteOptions {
   onConfirmed?: (index: number) => void;
   onProgress?: (p: Progress & { inFlight: number; resent: number }) => void;
   commitment?: Commitment;
+  senders?: Connection[]; // more RPCs to send through, in turn with conn (each one is rested on its own when it refuses)
 }
 
 // Sends every chunk of a file and returns once each one is confirmed. A chunk whose transaction
@@ -252,9 +253,12 @@ export async function writeFile(conn: Connection, writer: Keypair, file: Uint8Ar
 
   const gap = 1000 / rps;
   let nextAt = Date.now();
-  let pauseUntil = 0;
+  const senders = [conn, ...(opts.senders ?? [])].map((c) => ({ c, pauseUntil: 0 }));
+  let turn = 0;
   while ((queue.length || inFlight.size || sending) && !failure) {
-    if (!queue.length || inFlight.size + sending >= maxInFlight || Date.now() < pauseUntil) {
+    const now = Date.now();
+    const free = senders.filter((x) => x.pauseUntil <= now);
+    if (!queue.length || inFlight.size + sending >= maxInFlight || !free.length) {
       await new Promise((r) => setTimeout(r, 200));
       continue;
     }
@@ -271,9 +275,10 @@ export async function writeFile(conn: Connection, writer: Keypair, file: Uint8Ar
     tx.sign(writer);
     const lastValid = hash.lastValidBlockHeight;
     sending++;
-    conn.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 2 })
+    const via = free[turn++ % free.length];
+    via.c.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 2 })
       .then((sig) => { inFlight.set(sig, { index, lastValid }); })
-      .catch(() => { queue.push(index); pauseUntil = Date.now() + 1000; }) // rate limited or rejected: try again later
+      .catch(() => { queue.push(index); via.pauseUntil = Date.now() + 1000; }) // rate limited or rejected: try again later
       .finally(() => { sending--; });
   }
   await checker;

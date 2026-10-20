@@ -3,7 +3,7 @@
 //   node tools/cli.ts keygen   --out <keypair.json>
 //   node tools/cli.ts airdrop  --key <keypair.json> --rpc <url> [--sol 2]
 //   node tools/cli.ts inscribe --key <keypair.json> --rpc <url> --personality <file.json>
-//                              (--model <file.gguf> | --bound <provider>:<model>) [--rps 10] [--price 0]
+//                              (--model <file.gguf> | --bound <provider>:<model>) [--rps 10] [--price 0] [--send-also <rpc,rpc>]
 //   node tools/cli.ts rebuild  --link <scribes:v1:...> --rpc <url> [--out .cache/files]
 //   node tools/cli.ts init     --key <upgrade authority.json> --rpc <url> [--verifier <pk>] [--fee-receiver <pk>] [--fee <lamports>] [--royalty 0.01]
 //   node tools/cli.ts market   --key <admin.json> --rpc <url> --fee-bps 250
@@ -80,6 +80,7 @@ async function inscribeOne(conn: Connection, key: Keypair, role: Role, name: str
     const r = await writeFile(conn, key, bytes, {
       rps: Number(a.rps ?? 10),
       microLamports: Number(a.price ?? 0),
+      senders: (a['send-also'] ?? '').split(',').filter(Boolean).map((u) => new Connection(u, 'confirmed')),
       done,
       onProgress: (p) => {
         if (Date.now() - last < 2000 && p.done !== p.total) return;
