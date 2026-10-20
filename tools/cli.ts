@@ -10,6 +10,7 @@
 //   node tools/cli.ts test-token --key <admin.json> --rpc <url> [--burn 10] [--verifier <pk>] [--mint <existing mint> | --mint-authority <pk>] [--to <pk> --amount 100]   (not mainnet)
 //   node tools/cli.ts give     --key <owner.json> --rpc <url> --scribe <address> --to <pk>
 //   node tools/cli.ts handover --key <admin.json> --rpc <url> --admin <pk> [--fee-receiver <pk>]   (settings stay as they are otherwise)
+//   node tools/cli.ts token    --rpc <url> --mint <token> --burn <whole tokens> [--key <admin.json>]   (no --key: prints the multisig's transaction)
 //   (inscribe registers the scribe with the program at the end; --no-birth skips that)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -22,7 +23,8 @@ import { decodeManifest, encodeManifest, formatLink, parseLink, type Brain, type
 import { parsePersonality } from '../lib/src/personality.ts';
 import { runtimeFiles } from '../indexer/src/runtime.ts';
 import { ZERO_SHA, birthInstruction, giveInstruction, configAddress, marketAddress, readSettings, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
-import { TOKEN_2022_PROGRAM_ID, createMint, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, createMint, getMint, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
+import { utils } from '@coral-xyz/anchor';
 
 function args(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -240,6 +242,37 @@ async function main() {
     const ix = await program.methods.setSettings(settings).accountsPartial({ admin: key.publicKey, config: configAddress() }).instruction();
     const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
     console.log(`admin is now ${admin.toBase58()}${a['fee-receiver'] ? `, fees go to ${a['fee-receiver']}` : ''} · ${sig}`);
+  } else if (cmd === 'token') {
+    // Sets the token verification burns (e.g. $SCRIBE once it launches) and how many whole tokens it burns;
+    // every other setting is kept as it is. With --key (the admin) it is sent; without, the admin is a multisig
+    // vault, so the transaction is printed in base58 for its import (Squads: TX Builder, import transaction).
+    const conn = new Connection(need(a, 'rpc'), 'confirmed');
+    const program = scribesProgram(conn);
+    const c = await readSettings(program);
+    const admin = (await program.account.config.fetch(configAddress())).admin;
+    const mint = new PublicKey(need(a, 'mint'));
+    const info = await conn.getAccountInfo(mint);
+    if (!info) throw new Error(`no account at ${mint.toBase58()}`);
+    const { decimals, supply } = await getMint(conn, mint, 'confirmed', info.owner);
+    const burn = BigInt(need(a, 'burn')) * 10n ** BigInt(decimals);
+    const settings = settingsArg({
+      admin, verifier: new PublicKey(c.verifier), feeReceiver: new PublicKey(c.feeReceiver),
+      birthFee: c.birthFee, burnMint: mint, burnAmount: burn, modelRoyalty: c.modelRoyalty,
+    });
+    const ix = await program.methods.setSettings(settings).accountsPartial({ admin, config: configAddress() }).instruction();
+    const kind = info.owner.equals(TOKEN_2022_PROGRAM_ID) ? 'Token-2022' : info.owner.equals(TOKEN_PROGRAM_ID) ? 'SPL Token' : info.owner.toBase58();
+    console.log(`token ${mint.toBase58()} · ${kind} · ${decimals} decimals · supply ${(supply / 10n ** BigInt(decimals)).toLocaleString()}`);
+    console.log(`burn ${BigInt(a.burn).toLocaleString()} tokens (${burn} base units) per verification`);
+    console.log(`kept: admin ${admin.toBase58()} · verifier ${c.verifier} · fees to ${c.feeReceiver} · birth fee ${c.birthFee} lamports · royalty ${c.modelRoyalty} lamports`);
+    if (a.key) {
+      const key = loadKey(a.key);
+      if (!key.publicKey.equals(admin)) throw new Error(`--key is not the admin (${admin.toBase58()})`);
+      const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
+      console.log(`verification open · ${sig}`);
+    } else {
+      const tx = new Transaction({ feePayer: admin, ...(await conn.getLatestBlockhash('confirmed')) }).add(ix);
+      console.log(`\nfor the multisig (admin ${admin.toBase58()}), base58 transaction to import:\n${utils.bytes.bs58.encode(tx.serializeMessage())}`);
+    }
   } else if (cmd === 'rebuild') {
     const conn = new Connection(need(a, 'rpc'), 'confirmed');
     const link = parseLink(need(a, 'link'));

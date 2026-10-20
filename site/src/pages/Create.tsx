@@ -286,31 +286,26 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
 // nothing beside a 1 billion supply. On mainnet the program's set amount is the minimum
 const DEFAULT_BURN = 50_000;
 
-// the verify step: an on and off switch, gold when on, and how many $scribe to burn, never less than the
-// minimum. The amount's room is always kept, so nothing below it moves when the switch flips
+// the verify step: an on and off switch, gold when on, and the $scribe it burns. The program burns exactly its
+// set amount, so the box shows that amount and cannot be changed. Its room is always kept, so nothing below it
+// moves when the switch flips
 function VerifyStep({ n, verify, onVerify }: { n: number; verify: boolean; onVerify: (v: boolean) => void }) {
   const settings = useSettings();
-  const min = CLUSTER === 'mainnet' && settings?.burnAmount ? Number(tokens(settings.burnAmount, settings).replace(/,/g, '')) : DEFAULT_BURN;
-  // the box holds exactly what was typed; below the minimum it snaps back once you leave it
-  const [burn, setBurn] = useState<string | null>(null);
-  const typed = burn ?? String(min);
-  const amount = Number(typed) || 0;
+  const amount = CLUSTER === 'mainnet' && settings?.burnAmount ? Number(tokens(settings.burnAmount, settings).replace(/,/g, '')) : DEFAULT_BURN;
   if (!settings?.verificationOpen) return null;
   return (
     <>
-      <h3 className="sec-head"><i>{n}</i><span className="gold-text">verify</span><VerifiedMark size={18} /><Info text="you pay in two parts. first the inscription fee in sol, shown in full before you sign. then, once your scribe is born, the verification bot runs it and verifies every file, and you burn your chosen amount of $scribe in a second signature. the record is marked verified permanently and the burned tokens are gone for good." /></h3>
+      <h3 className="sec-head"><i>{n}</i><span className="gold-text">verify</span><VerifiedMark size={18} /><Info text={`you pay in two parts. first the inscription fee in sol, shown in full before you sign. then, once your scribe is born, the verification bot runs it and verifies every file, and you burn ${amount.toLocaleString()} $scribe in a second signature. the record is marked verified permanently and the burned tokens are gone for good.`} /></h3>
       <button type="button" role="switch" aria-checked={verify} className={`verify-toggle${verify ? ' on' : ''}`} onClick={() => onVerify(!verify)}>
         <span className="switch" aria-hidden="true" />
         <span><b>verification <em>(every file verified against its hash, then shown first in browse)</em></b></span>
       </button>
       <div className={`burn-field${verify ? '' : ' off'}`} aria-hidden={!verify}>
         <div className="amount-box">
-          <input inputMode="numeric" value={typed} tabIndex={verify ? 0 : -1} aria-label="$scribe to burn"
-            onChange={(e) => setBurn(e.target.value.replace(/\D/g, '').slice(0, 10))}
-            onBlur={() => setBurn(String(Math.min(Math.max(amount, min), 1e9)))} />
+          <input value={amount.toLocaleString()} readOnly tabIndex={-1} aria-label="$scribe burned" />
           <span><img src="/favicon.svg?v=4" alt="" />$scribe</span>
         </div>
-        <small className="burn-note">you burn {amount.toLocaleString()} $scribe in a second signature once your scribe is born. the minimum is {min.toLocaleString()}.<br />this is on top of the sol inscription fee.</small>
+        <small className="burn-note">you burn {amount.toLocaleString()} $scribe in a second signature once your scribe is born.<br />this is on top of the sol inscription fee.</small>
       </div>
     </>
   );
