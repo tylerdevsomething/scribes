@@ -8,6 +8,8 @@
 //   node tools/cli.ts init     --key <upgrade authority.json> --rpc <url> [--verifier <pk>] [--fee-receiver <pk>] [--fee <lamports>] [--royalty 0.01]
 //   node tools/cli.ts market   --key <admin.json> --rpc <url> --fee-bps 250
 //   node tools/cli.ts test-token --key <admin.json> --rpc <url> [--burn 10] [--verifier <pk>] [--mint <existing mint> | --mint-authority <pk>] [--to <pk> --amount 100]   (not mainnet)
+//   node tools/cli.ts give     --key <owner.json> --rpc <url> --scribe <address> --to <pk>
+//   node tools/cli.ts handover --key <admin.json> --rpc <url> --admin <pk> [--fee-receiver <pk>]   (settings stay as they are otherwise)
 //   (inscribe registers the scribe with the program at the end; --no-birth skips that)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -19,7 +21,7 @@ import { readGguf } from '../lib/src/gguf.ts';
 import { decodeManifest, encodeManifest, formatLink, parseLink, type Brain, type FileRef, type Manifest, type Role } from '../lib/src/manifest.ts';
 import { parsePersonality } from '../lib/src/personality.ts';
 import { runtimeFiles } from '../indexer/src/runtime.ts';
-import { ZERO_SHA, birthInstruction, configAddress, marketAddress, readSettings, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
+import { ZERO_SHA, birthInstruction, giveInstruction, configAddress, marketAddress, readSettings, scribeAddress, scribesProgram, settingsArg } from '../lib/src/registry.ts';
 import { TOKEN_2022_PROGRAM_ID, createMint, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
 
 function args(): Record<string, string> {
@@ -217,6 +219,26 @@ async function main() {
       await mintTo(conn, key, mint, ata.address, key, BigInt(a.amount ?? '100') * 1_000_000n, [], { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
       console.log(`minted ${a.amount ?? '100'} test tokens to ${a.to}`);
     }
+  } else if (cmd === 'give') {
+    const conn = new Connection(need(a, 'rpc'), 'confirmed');
+    const key = loadKey(need(a, 'key'));
+    const ix = await giveInstruction(scribesProgram(conn), key.publicKey, need(a, 'scribe'), new PublicKey(need(a, 'to')));
+    const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
+    console.log(`given to ${a.to} · ${sig}`);
+  } else if (cmd === 'handover') {
+    // Hands the settings to a new admin (e.g. a multisig); every other setting is kept as it is.
+    const conn = new Connection(need(a, 'rpc'), 'confirmed');
+    const key = loadKey(need(a, 'key'));
+    const program = scribesProgram(conn);
+    const c = await readSettings(program);
+    const admin = new PublicKey(need(a, 'admin'));
+    const settings = settingsArg({
+      admin, verifier: new PublicKey(c.verifier), feeReceiver: new PublicKey(a['fee-receiver'] ?? c.feeReceiver),
+      birthFee: c.birthFee, burnMint: c.burnMint ? new PublicKey(c.burnMint) : PublicKey.default, burnAmount: BigInt(c.burnAmount), modelRoyalty: c.modelRoyalty,
+    });
+    const ix = await program.methods.setSettings(settings).accountsPartial({ admin: key.publicKey, config: configAddress() }).instruction();
+    const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
+    console.log(`admin is now ${admin.toBase58()}${a['fee-receiver'] ? `, fees go to ${a['fee-receiver']}` : ''} · ${sig}`);
   } else if (cmd === 'rebuild') {
     const conn = new Connection(need(a, 'rpc'), 'confirmed');
     const link = parseLink(need(a, 'link'));

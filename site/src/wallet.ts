@@ -69,6 +69,18 @@ export async function signVersioned(tx: VersionedTransaction): Promise<Versioned
   return current.signTransaction(tx);
 }
 
+// Waits for a sent transaction by asking for its status (plain requests, no websocket, so it also works
+// through the server's RPC pass-through); gives up once its blockhash has expired.
+export async function confirmed(sig: string, lastValidBlockHeight: number): Promise<void> {
+  for (;;) {
+    const st = (await conn.getSignatureStatuses([sig])).value[0];
+    if (st?.err) throw new Error(`the transaction failed: ${JSON.stringify(st.err)}`);
+    if (st && (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized')) return;
+    if ((await conn.getBlockHeight('confirmed')) > lastValidBlockHeight) throw new Error('the transaction expired before it was confirmed: try again');
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+}
+
 // Builds, signs (wallet) and sends instructions; resolves once confirmed.
 export async function sendInstructions(ixs: TransactionInstruction[]): Promise<string> {
   if (!current || !address) throw new Error('connect a wallet first');
@@ -76,7 +88,6 @@ export async function sendInstructions(ixs: TransactionInstruction[]): Promise<s
   const tx = new Transaction({ feePayer: new PublicKey(address), blockhash, lastValidBlockHeight }).add(...ixs);
   const signed = await current.signTransaction(tx);
   const sig = await conn.sendRawTransaction(signed.serialize());
-  const r = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
-  if (r.value.err) throw new Error(`the transaction failed: ${JSON.stringify(r.value.err)}`);
+  await confirmed(sig, lastValidBlockHeight);
   return sig;
 }

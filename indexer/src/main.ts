@@ -44,6 +44,7 @@ import { Bounties } from './bounties.ts';
 import { Mainnet } from './mainnet.ts';
 import { HostedBrain } from './brain.ts';
 import { Faucet } from './faucet.ts';
+import { RpcProxy } from './rpc.ts';
 import { cardPng, sharePage } from './card.ts';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { getMint } from '@solana/spl-token';
@@ -57,6 +58,8 @@ const arg = (k: string, d?: string) => {
 };
 
 const conn = new Connection(arg('rpc', process.env.RPC_URL ?? ''), 'confirmed');
+// The browser's RPC goes through here when the site is built with VITE_RPC_URL=/api/rpc (mainnet: the key stays on the server).
+const rpc = new RpcProxy(arg('rpc', process.env.RPC_URL ?? ''));
 const cache = arg('cache', '.cache/indexer');
 const port = Number(arg('port', '8790'));
 const every = Number(arg('every', '5')) * 1000;
@@ -200,7 +203,7 @@ function serveSite(res: import('node:http').ServerResponse, pathname: string) {
 createServer((req, res) => {
   let url = new URL(req.url ?? '/', 'http://x');
   if (url.pathname.startsWith('/api/')) url = new URL(url.pathname.slice(4) + url.search, 'http://x');
-  else if (siteDir && req.method === 'GET' && !/^\/(health|brain|mainnet|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet|card|s)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
+  else if (siteDir && req.method === 'GET' && !/^\/(health|rpc|brain|mainnet|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet|card|s)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
   const parts = url.pathname.split('/').filter(Boolean);
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
@@ -209,6 +212,7 @@ createServer((req, res) => {
     if (req.method === 'GET') return json(res, 200, brain.status(visitorOf(req)));
     if (req.method === 'POST') { body(req, 400_000).then((b) => (parts[1] === 'grok' ? brain.handleGrok : brain.handle).call(brain, req, res, visitorOf(req), JSON.parse(new TextDecoder().decode(b) || '{}'), json)).catch((e) => { if (!res.headersSent) json(res, 400, { error: e.message }); }); return; }
   }
+  if (parts[0] === 'rpc' && req.method === 'POST') { body(req, 300_000).then((b) => rpc.handle(req, res, visitorOf(req), b, json)).catch((e) => { if (!res.headersSent) json(res, 400, { error: e.message }); }); return; }
   if (parts[0] === 'mainnet') {
     if (!mainnet) return json(res, 404, { error: 'no mainnet RPC configured (--mainnet-rpc or RPC_MAINNET)' });
     mainnet.handle(req, res, parts, url, () => jsonBody(req), json);

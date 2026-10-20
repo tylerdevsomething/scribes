@@ -25,7 +25,10 @@ import { Loading } from '../Loading.tsx';
 export function Create({ model }: { model?: string } = {}) {
   const [path, setPath] = useState<Path>('model');
   // verifying needs a born scribe, so it is chosen here and offered once the birth is done
-  const [verifyAfter, setVerifyAfter] = useState(true);
+  const [verifyWanted, setVerifyAfter] = useState(true);
+  // until the $SCRIBES token exists (mainnet before launch) verification is closed: no verify step at all
+  const verifyOpen = !!useSettings()?.verificationOpen;
+  const verifyAfter = verifyWanted && verifyOpen;
   const [parts, setParts] = useState<Parts | null>(null); // set when the user asks for a check
   const [id, setId] = useState<string | null>(null);
   const [report, setReport] = useState<CheckReport | null>(null);
@@ -290,6 +293,7 @@ function VerifyStep({ n, verify, onVerify }: { n: number; verify: boolean; onVer
   const [burn, setBurn] = useState<string | null>(null);
   const typed = burn ?? String(min);
   const amount = Number(typed) || 0;
+  if (!settings?.verificationOpen) return null;
   return (
     <>
       <h3 className="sec-head"><i>{n}</i><span className="gold-text">verify</span><VerifiedMark size={18} /><Info text="you pay in two parts. first the inscription fee in sol, shown in full before you sign. then, once your scribe is born, the verification bot runs it and checks every file, and you burn your chosen amount of $scribes in a second signature. the record is marked verified permanently and the burned tokens are gone for good." /></h3>
