@@ -61,6 +61,7 @@ const KEY = { one: { l: 15.588, t: 80, w: 4.033, h: 2.237 }, zero: { l: 63.35, t
 export function HeroScene() {
   const screen = useRef<HTMLCanvasElement>(null);
   const key = useRef<HTMLElement>(null);
+  const img = useRef<HTMLImageElement>(null);
   useEffect(() => {
     const c = screen.current!;
     const press = (one: boolean) => {
@@ -71,14 +72,18 @@ export function HeroScene() {
       setTimeout(() => el.classList.remove('down'), 180);
     };
     let stop = () => {};
-    document.fonts.ready.then(() => { stop = startChain(c, { ox: c.offsetLeft % 3, oy: c.offsetTop % 3, onKey: press }); });
-    return () => stop();
+    // the screen's place on the dot grid is only known once the computer drawing has its size
+    let gone = false;
+    Promise.all([document.fonts.ready, img.current!.decode().catch(() => {})]).then(() => {
+      if (!gone) stop = startChain(c, { ox: c.offsetLeft % 3, oy: c.offsetTop % 3, onKey: press });
+    });
+    return () => { gone = true; stop(); };
   }, []);
 
   return (
     <div className="hero-split">
       <div className="pc">
-        <img src="/hero/computer.svg?v=2" alt="" />
+        <img ref={img} src="/hero/computer.svg?v=2" alt="" />
         <i className="key" ref={key} />
         <canvas className="screen" ref={screen} />
         {/* a hint that there is more below, centred under the computer; it fades once you scroll */}

@@ -93,7 +93,10 @@ export function startChain(canvas: HTMLCanvasElement, opts: Opts): () => void {
     }
   };
 
-  size(); addEventListener('resize', size);
+  // measured again whenever the screen changes size (the computer drawing can load after this starts)
+  size();
+  const seen = new ResizeObserver(size);
+  seen.observe(canvas);
   raf = requestAnimationFrame(draw);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
     // a still, sealed chain of three
@@ -101,5 +104,5 @@ export function startChain(canvas: HTMLCanvasElement, opts: Opts): () => void {
     shift = shiftTo;
   } else run();
 
-  return () => { alive = false; cancelAnimationFrame(raf); timers.forEach(clearTimeout); removeEventListener('resize', size); };
+  return () => { alive = false; cancelAnimationFrame(raf); timers.forEach(clearTimeout); seen.disconnect(); };
 }
