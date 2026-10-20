@@ -4,7 +4,9 @@ import { sha256Hex } from '../../../lib/src/bytes.ts';
 import { readGguf } from '../../../lib/src/gguf.ts';
 import type { FileRef, Manifest } from '../../../lib/src/manifest.ts';
 import { fileUrl } from '../api.ts';
-import { looping, trimLoop, type Brain } from './brain.ts';
+import { looping, trimLoop, type Brain, type ReplyContext } from './brain.ts';
+import { PAGE_TOOLS_MIN_PARAMS } from '../../../lib/src/tools.ts';
+import { lookUp } from './lookup.ts';
 
 type Wllama = {
   loadModel(blobs: Blob[], params?: Record<string, unknown>): Promise<void>;
@@ -90,11 +92,16 @@ export async function loadInscribed(manifest: Manifest, step: Step): Promise<Bra
 
   return {
     label: `${info.name ?? modelRef.name} · ${(info.parameters / 1e6).toFixed(info.parameters < 1e7 ? 1 : 0)}M parameters · running in this browser`,
-    async reply(system, history, onText, signal) {
+    pageTools: info.parameters >= PAGE_TOOLS_MIN_PARAMS,
+    async reply(system, history, onText, signal, ctx?: ReplyContext) {
       const abort = new AbortController();
       signal.addEventListener('abort', () => abort.abort());
+      // the page looks up what the message asks for; with facts in the prompt, fewer past turns fit
+      const last = history[history.length - 1]?.content ?? '';
+      const facts = ctx?.tools.length ? await lookUp(last, ctx.tools, { scribe: ctx.scribe, propose: ctx.propose, client: null }, ctx.onTool) : '';
       const stream = await w.createChatCompletion({
-        messages: [{ role: 'system', content: system }, ...history.slice(-RECENT_TURNS)],
+        // small models heed what sits beside the question more than the system prompt, so the facts go there
+        messages: [{ role: 'system', content: system }, ...history.slice(facts ? -4 : -RECENT_TURNS).map((t, i, l) => (facts && i === l.length - 1 ? { ...t, content: t.content + facts } : t))],
         stream: true, abortSignal: abort.signal, ...SAMPLING,
       });
       let text = '';

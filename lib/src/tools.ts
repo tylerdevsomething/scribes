@@ -52,6 +52,11 @@ export const ACTIVE_TOOLS = TOOL_CATALOG.filter((t) => !PAUSED_TOOLS.includes(t.
 
 export const OFFICIAL_TOOLS = ACTIVE_TOOLS.map((t) => t.name);
 
+// The read-only tools an inscribed brain can have: the page runs them from the visitor's message and gives
+// the model the results (site/src/run/lookup.ts). Only models this size or larger get them.
+export const PAGE_TOOLS = ['calculator', 'clock', 'trending_tokens', 'token_report', 'token_prices', 'network_status', 'wallet_portfolio', 'wallet_activity', 'explain_transaction', 'scribe_lookup', 'scribe_market'];
+export const PAGE_TOOLS_MIN_PARAMS = 400e6;
+
 export const GROUP_LABELS: Record<ToolGroup, string> = {
   think: 'Thinking & the web', market: 'Market (live mainnet data)', wallet: 'Wallets (mainnet)', scribes: 'Scribes', propose: 'Actions: you approve each one in your wallet',
 };

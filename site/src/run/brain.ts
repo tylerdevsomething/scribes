@@ -11,6 +11,7 @@ export interface ReplyContext {
 export interface Brain {
   label: string; // shown under the chat, e.g. "SmolLM2 135M · in this browser"
   usesTools?: boolean;
+  pageTools?: boolean; // an inscribed brain the page looks things up for (read-only tools)
   hosted?: boolean; // runs on the site's free brain (limited messages a day)
   reply(system: string, history: Turn[], onText: (soFar: string) => void, signal: AbortSignal, ctx?: ReplyContext): Promise<string>;
 }

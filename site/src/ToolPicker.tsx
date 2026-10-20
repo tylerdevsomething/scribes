@@ -4,20 +4,24 @@ import { ACTIVE_TOOLS as TOOL_CATALOG, GROUP_LABELS, PRESETS, type ToolGroup } f
 const GROUPS: ToolGroup[] = ['market', 'wallet', 'propose', 'scribes', 'think'];
 
 
-export function ToolPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+// only: offer just these tools (and the presets cut down to them)
+export function ToolPicker({ value, onChange, only }: { value: string[]; onChange: (v: string[]) => void; only?: string[] }) {
+  const catalog = only ? TOOL_CATALOG.filter((t) => only.includes(t.name)) : TOOL_CATALOG;
+  const presets = only ? PRESETS.map((p) => ({ ...p, tools: p.tools.filter((t) => only.includes(t)) })).filter((p) => p.tools.length >= 3) : PRESETS;
   const toggle = (t: string, on: boolean) => onChange(on ? [...value, t] : value.filter((x) => x !== t));
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
   return (
     <div className="toolpicker">
       <div className="presets">
-        {PRESETS.map((p) => (
+        {presets.map((p) => (
           <button type="button" key={p.name} className={`preset ${same(value, p.tools) ? 'on' : ''}`} title={p.hint} onClick={() => onChange(same(value, p.tools) ? [] : [...p.tools])}>
             <b>{p.name}</b><small>{p.hint}</small>
           </button>
         ))}
       </div>
       {GROUPS.map((g) => {
-        const tools = TOOL_CATALOG.filter((t) => t.group === g);
+        const tools = catalog.filter((t) => t.group === g);
+        if (!tools.length) return null;
         const all = tools.every((t) => value.includes(t.name));
         return (
           <div key={g} className="tgroup">

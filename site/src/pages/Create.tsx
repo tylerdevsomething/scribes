@@ -10,6 +10,7 @@ import { Folio } from '../Hero.tsx';
 import { Figure } from '../Figure.tsx';
 import { ToolPicker } from '../ToolPicker.tsx';
 import { PROVIDERS, type Provider } from '../../../lib/src/hybrid.ts';
+import { PAGE_TOOLS, PAGE_TOOLS_MIN_PARAMS } from '../../../lib/src/tools.ts';
 
 type Part = 'personality' | 'model' | 'model-ref' | 'brain' | 'picture';
 type Parts = Partial<Record<Part, File>>;
@@ -156,13 +157,17 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
     return () => URL.revokeObjectURL(u);
   }, [picture]);
 
+  // an inscribed model gets the read-only tools the page runs for it, if it is large enough to use them
+  const picked = models?.find((m) => m.sha256 === modelSha);
+  const pageTools = ownPath || (!hybrid && !!picked && picked.parameters >= PAGE_TOOLS_MIN_PARAMS);
   const brainOk = brain === 'existing' ? !!modelSha : brain === 'own' ? !!own : true;
   const ready = name.trim() && purpose.trim() && voice.trim() && boundaries.trim() && brainOk;
 
   function submit() {
     const p: Parts = {};
     const pers: Record<string, unknown> = { name: name.trim(), purpose: purpose.trim(), voice: voice.trim(), boundaries: boundaries.trim() };
-    if (tools.length) pers.tools = tools;
+    const kept = hybrid ? tools : pageTools ? tools.filter((t) => PAGE_TOOLS.includes(t)) : [];
+    if (kept.length) pers.tools = kept;
     const mem = memory.split('\n').map((x) => x.trim()).filter(Boolean);
     if (mem.length) pers.memory = mem;
     p.personality = new File([JSON.stringify(pers, null, 2)], 'personality.json', { type: 'application/json' });
@@ -235,12 +240,12 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
           <textarea rows={2} maxLength={4000} placeholder="never asks for a seed phrase, never moves anyone's funds" value={boundaries} onChange={(e) => setBoundaries(e.target.value)} onBlur={leave('boundaries')} />
         </label>
 
-        {/* tools run on a hosted brain only, so they are offered on the hybrid tier */}
-        {hybrid && <>
-          <div className="field tools-field"><span>tools <em>(what it can look up, and the actions it may draft for you to approve)</em></span>
-            <ToolPicker value={tools} onChange={setTools} />
+        {/* hybrid: every tool. an inscribed model large enough: the read-only tools the page runs for it */}
+        {(hybrid || pageTools) && (
+          <div className="field tools-field"><span>tools <em>{hybrid ? '(what it can look up, and the actions it may draft for you to approve)' : '(what it can look up)'}</em></span>
+            <ToolPicker value={tools} onChange={setTools} only={hybrid ? undefined : PAGE_TOOLS} />
           </div>
-        </>}
+        )}
 
         <Sec n={3} t="image" />
         <div className={`pic-drop${hot ? ' hot' : ''}${picture ? ' filled' : ''}`} onClick={() => pic.current?.click()}

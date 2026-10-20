@@ -17,6 +17,7 @@ import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
 import { describeError, HostedError, hostedFor, hostedStatus, keyStore, loadBound, loadHosted, type HostedStatus } from '../run/bound.ts';
 import { PROVIDERS, isProvider } from '../../../lib/src/hybrid.ts';
+import { PAGE_TOOLS } from '../../../lib/src/tools.ts';
 import { enabledTools, type Proposal } from '../run/tools.ts';
 import { TOOL_CATALOG } from '../../../lib/src/tools.ts';
 import { SystemProgram, PublicKey } from '@solana/web3.js';
@@ -509,7 +510,7 @@ function Chat({ brain: given, personality, s, first, checks }: { brain: Brain; p
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
   const [proposals, setProposals] = useState<(Proposal & { state: 'open' | 'sent' | 'declined'; sig?: string; error?: string; at: number })[]>([]);
-  const tools = brain.usesTools ? enabledTools(personality.tools) : [];
+  const tools = brain.usesTools ? enabledTools(personality.tools) : brain.pageTools ? enabledTools(personality.tools).filter((t) => PAGE_TOOLS.includes(t)) : [];
   const logRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   // follows the newest message once there is one; before that the checks and the starters show from the top
