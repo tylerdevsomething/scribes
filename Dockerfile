@@ -6,6 +6,7 @@
 #   VERIFIER_KEY       JSON key array of the verifier (enables the verification bot)
 #   FAUCET_KEY         JSON key array of the test token's mint authority (test faucet; never on mainnet)
 #   ANTHROPIC_API_KEY  the free hosted brain for Claude-bound scribes, and the bot's tests (optional)
+#   HIDDEN             scribe addresses the site does not show (comma separated)
 #   BRAIN_PER_VISITOR / BRAIN_DAILY_USD  free messages per visitor per day (20) and the daily budget (5)
 #   VITE_RPC_URL / VITE_CLUSTER  baked into the site at build time (the browser's RPC and network name)
 FROM node:24-slim

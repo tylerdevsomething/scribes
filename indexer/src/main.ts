@@ -29,8 +29,8 @@
 // Production: --site <dir> also serves the built site (dist/site) from the same server; the API is
 // then reachable under /api as well, as the site expects.
 //
-// Hidden scribes: list their addresses in <cache>/hidden.json. They stay on chain; the site just
-// does not show them or serve their files.
+// Hidden scribes: list their addresses in <cache>/hidden.json, or in HIDDEN (comma separated). They stay
+// on chain; the site just does not show them or serve their files.
 import { createServer } from 'node:http';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
@@ -126,7 +126,8 @@ async function jsonBody(req: import('node:http').IncomingMessage): Promise<Recor
 
 function loadHidden() {
   const p = join(cache, 'hidden.json');
-  if (existsSync(p)) indexer.setHidden(JSON.parse(readFileSync(p, 'utf8')));
+  const fromEnv = (process.env.HIDDEN ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  indexer.setHidden([...fromEnv, ...(existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) as string[] : [])]);
 }
 
 async function loop() {

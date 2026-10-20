@@ -339,7 +339,7 @@ export class Indexer {
   models(): ModelInfo[] {
     const out = new Map<string, ModelInfo>();
     for (const e of [...this.entries.values()].sort((a, b) => a.record.birthNumber - b.record.birthNumber)) {
-      if (e.invalid || !e.decoded || !e.gguf || e.decoded.brain.kind !== 'inscribed') continue;
+      if (e.invalid || this.hidden.has(e.record.address) || !e.decoded || !e.gguf || e.decoded.brain.kind !== 'inscribed') continue;
       const sha = e.decoded.brain.model;
       const f = e.decoded.files.find((x) => x.sha256 === sha)!;
       if (!e.files.get(sha)?.complete) continue;
