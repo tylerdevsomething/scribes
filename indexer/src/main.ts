@@ -8,6 +8,7 @@
 // GET /activity[?scribe=&limit=]  births, verifications, listings, sales and gifts, newest first
 // GET /brain            free hosted brain: {enabled, open, remaining, perDay} for this visitor
 // POST /brain {scribe, messages}  one Claude call for a Claude-bound scribe (server-sent events)
+// POST /brain/grok {scribe, messages}  one Grok call for a Grok-bound scribe (xAI's event stream)
 // /mainnet/...          read-only mainnet data for the tools (see mainnet.ts)
 // GET /bounties         every bounty: open ones with their question and answers, settled ones
 // GET /bounty/:address  one bounty
@@ -65,10 +66,11 @@ indexer.setOwnerHistory((scribe, slot) => activity.ownerAt(scribe, slot));
 // Mainnet reads for the tools (always mainnet, whatever network the scribes live on).
 const mainnetRpc = process.argv.includes('--mainnet-rpc') ? arg('mainnet-rpc') : process.env.RPC_MAINNET ?? '';
 const mainnet = mainnetRpc ? new Mainnet(mainnetRpc) : null;
-// The free hosted brain (the operator's Anthropic key, with limits).
-const brain = process.env.ANTHROPIC_API_KEY && !process.argv.includes('--no-hosted-brain')
+// The free hosted brain (the operator's Anthropic and xAI keys, with limits shared by both).
+const xaiKey = process.env.XAI_API_KEY ?? process.env.GROK_API_KEY;
+const brain = (process.env.ANTHROPIC_API_KEY || xaiKey) && !process.argv.includes('--no-hosted-brain')
   ? new HostedBrain({
-    apiKey: process.env.ANTHROPIC_API_KEY, indexer, statePath: join(cache, 'brain.json'),
+    apiKey: process.env.ANTHROPIC_API_KEY, xaiKey, indexer, statePath: join(cache, 'brain.json'),
     limits: { perVisitorPerDay: Number(process.env.BRAIN_PER_VISITOR ?? 20), dailyBudgetUsd: Number(process.env.BRAIN_DAILY_USD ?? 5) },
   })
   : null;
@@ -87,7 +89,7 @@ const uploads = writerPath
   : null;
 setInterval(() => uploads?.sweep(), 3600 * 1000);
 const verifier = process.argv.includes('--verifier')
-  ? new Verifier({ indexer, key: loadKey(arg('verifier')), anthropicKey: process.env.ANTHROPIC_API_KEY })
+  ? new Verifier({ indexer, key: loadKey(arg('verifier')), anthropicKey: process.env.ANTHROPIC_API_KEY, xaiKey })
   : null;
 const faucet = process.argv.includes('--faucet') ? new Faucet(conn, loadKey(arg('faucet'))) : null;
 
@@ -205,7 +207,7 @@ createServer((req, res) => {
   if (parts[0] === 'brain') {
     if (!brain) return json(res, 200, { enabled: false });
     if (req.method === 'GET') return json(res, 200, brain.status(visitorOf(req)));
-    if (req.method === 'POST') { body(req, 400_000).then((b) => brain.handle(req, res, visitorOf(req), JSON.parse(new TextDecoder().decode(b) || '{}'), json)).catch((e) => { if (!res.headersSent) json(res, 400, { error: e.message }); }); return; }
+    if (req.method === 'POST') { body(req, 400_000).then((b) => (parts[1] === 'grok' ? brain.handleGrok : brain.handle).call(brain, req, res, visitorOf(req), JSON.parse(new TextDecoder().decode(b) || '{}'), json)).catch((e) => { if (!res.headersSent) json(res, 400, { error: e.message }); }); return; }
   }
   if (parts[0] === 'mainnet') {
     if (!mainnet) return json(res, 404, { error: 'no mainnet RPC configured (--mainnet-rpc or RPC_MAINNET)' });

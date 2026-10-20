@@ -17,8 +17,5 @@ export function explorer(kind: 'address' | 'tx', id: string): string {
 export const sol = (lamports: number) => String(parseFloat((lamports / 1e9).toFixed(lamports < 1e7 ? 6 : 4)));
 export const short = (s: string) => `${s.slice(0, 4)}…${s.slice(-4)}`;
 
-// "claude-opus-5-5" → "Claude Opus 5.5"; other ids are shown as they are.
-export function modelName(id: string): string {
-  const m = /^claude-([a-z]+)-(\d+)-(\d+)$/.exec(id);
-  return m ? `Claude ${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}.${m[3]}` : id;
-}
+// "claude-opus-5-5" → "Claude Opus 5.5", "grok-4.7" → "Grok 4.7".
+export { modelName } from '../../lib/src/hybrid.ts';

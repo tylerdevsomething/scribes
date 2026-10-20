@@ -15,7 +15,8 @@ import { VerifiedMark } from '../Figure.tsx';
 import { sigil } from '../../../lib/src/sigil.ts';
 import type { Brain, Turn } from '../run/brain.ts';
 import { loadInscribed, type Step } from '../run/inscribed.ts';
-import { describeError, HostedError, hostedStatus, loadBound, loadHosted, type HostedStatus } from '../run/bound.ts';
+import { describeError, HostedError, hostedFor, hostedStatus, keyStore, loadBound, loadHosted, type HostedStatus } from '../run/bound.ts';
+import { PROVIDERS, isProvider } from '../../../lib/src/hybrid.ts';
 import { enabledTools, type Proposal } from '../run/tools.ts';
 import { TOOL_CATALOG } from '../../../lib/src/tools.ts';
 import { SystemProgram, PublicKey } from '@solana/web3.js';
@@ -29,7 +30,9 @@ import { sol } from '../config.ts';
 import { Rich } from '../Rich.tsx';
 import { Loading, useHold } from '../Loading.tsx';
 
-const KEY_STORE = 'scribes.anthropic-key';
+// the visitor's own key for a hybrid scribe: which provider, and what the key is called
+const providerOf = (s: ScribeView) => (s.brain?.kind === 'bound' ? s.brain.provider : 'anthropic');
+const keyLabel = (s: ScribeView) => { const p = providerOf(s); return `${isProvider(p) ? PROVIDERS[p].keyName : p} api key`.toLowerCase(); };
 // each check before a chat stays on screen a moment so it can be read
 const hold = () => new Promise((r) => setTimeout(r, 900));
 // Where each attribute comes from (the brief's colour code).
@@ -306,13 +309,13 @@ function Wake({ s, ask, controls }: { s: ScribeView; ask?: string; controls?: Re
   const [personality, setPersonality] = useState<Personality | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [busy, setBusy] = useState(false);
-  const [key, setKey] = useState(() => { try { return localStorage.getItem(KEY_STORE) ?? ''; } catch { return ''; } });
+  const [key, setKey] = useState(() => { try { return localStorage.getItem(keyStore(providerOf(s))) ?? ''; } catch { return ''; } });
   const [remember, setRemember] = useState(false);
   const [hosted, setHosted] = useState<HostedStatus | null>(null);
   const [ownKey, setOwnKey] = useState(false); // use my own key instead of the free brain
   const [pending, setPending] = useState<string | undefined>(ask); // a question to ask as soon as it wakes
   useEffect(() => { if (s.brain?.kind === 'bound') hostedStatus().then(setHosted); }, [s.brain?.kind]);
-  const free = !!(hosted?.enabled && hosted.open && (hosted.remaining ?? 0) > 0) && !ownKey;
+  const free = !!(hostedFor(hosted, providerOf(s)) && hosted!.open && (hosted!.remaining ?? 0) > 0) && !ownKey;
   // Arriving with a question (a link from the home page): wake on the free brain straight away.
   const asked = useRef(false);
   useEffect(() => {
@@ -370,11 +373,11 @@ function Wake({ s, ask, controls }: { s: ScribeView; ask?: string; controls?: Re
         setBrain(await loadInscribed(m, step));
       } else {
         if (free) {
-          setBrain(loadHosted(s.address, m.brain.model));
+          setBrain(loadHosted(s.address, m.brain.model, m.brain.provider));
           step('Running free', 'ok');
         } else {
-          if (!key.trim()) throw new Error('Enter your Anthropic API key to chat with this scribe.');
-          try { if (remember) localStorage.setItem(KEY_STORE, key.trim()); } catch { /* storage unavailable */ }
+          if (!key.trim()) throw new Error(`Enter your ${keyLabel(s).replace('api key', 'API key')} to chat with this scribe.`);
+          try { if (remember) localStorage.setItem(keyStore(m.brain.provider), key.trim()); } catch { /* storage unavailable */ }
           setBrain(loadBound(m.brain.provider, m.brain.model, key.trim()));
           step('Running on your key', 'ok');
         }
@@ -397,18 +400,18 @@ function Wake({ s, ask, controls }: { s: ScribeView; ask?: string; controls?: Re
         </button>{controls}</div>
       {!brain && (
         <>
-          {bound && hosted?.enabled && !free && !ownKey && (
-            <div className="notice info" style={{ marginBottom: 12 }}>{hosted.open ? "You've used today's free messages." : 'The free brain is resting until tomorrow.'} You can keep going with your own key.</div>
+          {bound && hostedFor(hosted, providerOf(s)) && !free && !ownKey && (
+            <div className="notice info" style={{ marginBottom: 12 }}>{hosted!.open ? "You've used today's free messages." : 'The free brain is resting until tomorrow.'} You can keep going with your own key.</div>
           )}
           {bound && !free && (
             <div className="row" style={{ marginBottom: 12 }}>
-              <input className="grow key-field" type="password" placeholder="anthropic api key" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" />
+              <input className="grow key-field" type="password" placeholder={keyLabel(s)} value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" />
               <label className={`key-remember${remember ? ' on' : ''}`}><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><i aria-hidden="true" />remember on this device</label>
             </div>
           )}
           <div className="row">
             <button className="primary" disabled={busy} onClick={() => wake()}>{busy ? 'loading...' : `chat${bound && free ? ' free' : ''}`}</button>
-            {bound && hosted?.enabled && <button className="link" onClick={() => setOwnKey(!ownKey)}>{ownKey ? 'Use the free brain' : 'Use my own key instead'}</button>}
+            {bound && hostedFor(hosted, providerOf(s)) && <button className="link" onClick={() => setOwnKey(!ownKey)}>{ownKey ? 'Use the free brain' : 'Use my own key instead'}</button>}
           </div>
           {(!bound || free || key.trim()) && (
             <div className="try">
@@ -491,7 +494,7 @@ function Chat({ brain: given, personality, s, first, checks }: { brain: Brain; p
   // When the free brain's limit is reached, the visitor can carry on with their own key in the same conversation.
   const [own, setOwn] = useState<Brain | null>(null);
   const [limited, setLimited] = useState(false);
-  const [key, setKey] = useState(() => { try { return localStorage.getItem(KEY_STORE) ?? ''; } catch { return ''; } });
+  const [key, setKey] = useState(() => { try { return localStorage.getItem(keyStore(providerOf(s))) ?? ''; } catch { return ''; } });
   const brain = own ?? given;
   // The conversation is kept in this browser, per scribe, so a refresh does not lose it.
   const store = `scribes.chat.${s.address}`;
@@ -585,7 +588,7 @@ function Chat({ brain: given, personality, s, first, checks }: { brain: Brain; p
       {error && <div className="notice bad" style={{ marginBottom: 10 }}>{error}</div>}
       {limited && !own && s.brain?.kind === 'bound' && (
         <div className="row" style={{ marginBottom: 10 }}>
-          <input className="grow" type="password" placeholder="anthropic api key" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" />
+          <input className="grow" type="password" placeholder={keyLabel(s)} value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" />
           <button disabled={!key.trim()} onClick={() => { if (s.brain?.kind === 'bound') { setOwn(loadBound(s.brain.provider, s.brain.model, key.trim())); setError(''); } }}>continue with my key</button>
         </div>
       )}

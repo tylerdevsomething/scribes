@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { Brain, ReplyContext } from './brain.ts';
 import { runTool, toolDefinitions } from './tools.ts';
 import { API, modelName } from '../config.ts';
+import { loadGrok, loadHostedGrok } from './grok.ts';
 
 const MAX_STEPS = 8; // model calls per reply (tool rounds included)
 
@@ -62,6 +63,7 @@ function brainFrom(label: string, call: Call, client: Anthropic | null): Brain {
 
 // The visitor's own key.
 export function loadBound(provider: string, model: string, apiKey: string): Brain {
+  if (provider === 'xai') return loadGrok(model, apiKey);
   if (provider !== 'anthropic') throw new Error(`brains bound to "${provider}" cannot run here yet`);
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   let system = '';
@@ -84,7 +86,13 @@ export function loadBound(provider: string, model: string, apiKey: string): Brai
 
 // ---- the free hosted brain ----
 
-export interface HostedStatus { enabled: boolean; open?: boolean; remaining?: number; perDay?: number }
+export interface HostedStatus { enabled: boolean; providers?: Record<string, boolean>; open?: boolean; remaining?: number; perDay?: number }
+
+// The free brain can run this provider (older servers only knew Claude).
+export const hostedFor = (h: HostedStatus | null, provider: string) => !!h?.enabled && (h.providers ? !!h.providers[provider] : provider === 'anthropic');
+
+// Where a visitor's own key is remembered, one per provider.
+export const keyStore = (provider: string) => (provider === 'anthropic' ? 'scribes.anthropic-key' : `scribes.${provider}-key`);
 
 export async function hostedStatus(): Promise<HostedStatus> {
   try { return await fetch(`${API}/brain`).then((r) => r.json()); } catch { return { enabled: false }; }
@@ -123,7 +131,8 @@ export class HostedError extends Error {
   constructor(message: string, limited: boolean) { super(message); this.limited = limited; }
 }
 
-export function loadHosted(scribe: string, model: string): Brain {
+export function loadHosted(scribe: string, model: string, provider = 'anthropic'): Brain {
+  if (provider === 'xai') return loadHostedGrok(scribe, model);
   return { ...brainFrom(`${modelName(model)} · free, on Scribes`, (messages, _tools, onDelta, signal) => hostedCall(scribe, messages, onDelta, signal), null), hosted: true };
 }
 

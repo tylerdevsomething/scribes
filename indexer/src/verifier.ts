@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import nacl from 'tweetnacl';
 import Anthropic from '@anthropic-ai/sdk';
+import { XAI_URL } from '../../lib/src/hybrid.ts';
 import { getLlama, LlamaChatSession, type Llama } from 'node-llama-cpp';
 import { concat, fromHex, sha256Hex, utf8 } from '../../lib/src/bytes.ts';
 import { systemPrompt, type Personality } from '../../lib/src/personality.ts';
@@ -30,15 +31,17 @@ export class Verifier {
   private indexer: Indexer;
   private key: Keypair;
   private anthropicKey: string | undefined;
+  private xaiKey: string | undefined;
   private llama: Promise<Llama> | null = null;
   private official: Promise<Set<string>>;
   private cache = new Map<string, Verdict>(); // by manifest sha: the same files give the same verdict
   private queue: Promise<unknown> = Promise.resolve();
 
-  constructor(opts: { indexer: Indexer; key: Keypair; anthropicKey?: string }) {
+  constructor(opts: { indexer: Indexer; key: Keypair; anthropicKey?: string; xaiKey?: string }) {
     this.indexer = opts.indexer;
     this.key = opts.key;
     this.anthropicKey = opts.anthropicKey;
+    this.xaiKey = opts.xaiKey;
     this.official = Promise.all(runtimeFiles().map((r) => sha256Hex(r.bytes))).then((h) => new Set(h));
   }
 
@@ -117,6 +120,7 @@ export class Verifier {
   }
 
   private async runBound(provider: string, model: string, p: Personality): Promise<string> {
+    if (provider === 'xai') return this.runGrok(model, p);
     if (provider !== 'anthropic') throw new Error(`brains bound to "${provider}" cannot be tested yet`);
     if (!this.anthropicKey) throw new Error('the bot has no Anthropic key configured, so bound brains cannot be tested yet');
     const client = new Anthropic({ apiKey: this.anthropicKey });
@@ -129,5 +133,17 @@ export class Verifier {
     });
     if (res.stop_reason === 'refusal') throw new Error('the model declined the test prompt');
     return res.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+  }
+
+  private async runGrok(model: string, p: Personality): Promise<string> {
+    if (!this.xaiKey) throw new Error('the bot has no xAI key configured, so Grok brains cannot be tested yet');
+    const res = await fetch(XAI_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${this.xaiKey}` },
+      body: JSON.stringify({ model, max_tokens: 1024, messages: [{ role: 'system', content: systemPrompt(p) }, { role: 'user', content: TEST_PROMPT }] }),
+    });
+    if (!res.ok) throw new Error(`Grok answered ${res.status}`);
+    const j = await res.json() as { choices?: { message?: { content?: string } }[] };
+    return j.choices?.[0]?.message?.content ?? '';
   }
 }

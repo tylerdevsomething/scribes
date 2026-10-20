@@ -9,16 +9,12 @@ import { Sigil } from '../Sigil.tsx';
 import { Folio } from '../Hero.tsx';
 import { Figure } from '../Figure.tsx';
 import { ToolPicker } from '../ToolPicker.tsx';
+import { PROVIDERS, type Provider } from '../../../lib/src/hybrid.ts';
 
 type Part = 'personality' | 'model' | 'model-ref' | 'brain' | 'picture';
 type Parts = Partial<Record<Part, File>>;
 
 const size = (n: number) => (n < 1e6 ? `${(n / 1e3).toFixed(1)} KB` : `${(n / 1e6).toFixed(1)} MB`);
-const CLAUDE_MODELS = [
-  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 — most capable', short: 'Opus 5.5', hint: 'Most capable' },
-  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 — fast and capable', short: 'Sonnet 5.5', hint: 'Fast and capable' },
-  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 — quickest, cheapest', short: 'Haiku 5.5', hint: 'Quickest' },
-];
 
 import type { ModelInfo } from './Models.tsx';
 import { useSettings } from '../settings.ts';
@@ -66,7 +62,7 @@ export function Create({ model }: { model?: string } = {}) {
             <>
               {path === 'folder'
                 ? <Uploader busy={!!busy} onCheck={check} ways={<Ways path={path} onPath={setPath} />} verify={verifyAfter} onVerify={setVerifyAfter} />
-                : <Builder key={path} own={path === 'own'} model={model} busy={!!busy} onCheck={check} verify={verifyAfter} onVerify={setVerifyAfter} ways={<Ways path={path} onPath={setPath} />} />}
+                : <Builder key={path} own={path === 'own'} hybrid={path === 'hybrid'} model={model} busy={!!busy} onCheck={check} verify={verifyAfter} onVerify={setVerifyAfter} ways={<Ways path={path} onPath={setPath} />} />}
             </>
           )}
           {busy && !report && <Loading text={busy} />}
@@ -79,19 +75,32 @@ export function Create({ model }: { model?: string } = {}) {
   );
 }
 
-// section 1, the ai model: three ways, the same size side by side
-type Path = 'model' | 'own' | 'folder';
+// section 1, the ai model: two tiers. full inscription puts the model itself on solana (three ways to
+// choose it, the same size side by side); hybrid inscribes the agent and binds it to claude or grok
+type Path = 'model' | 'own' | 'folder' | 'hybrid';
 const PICKED = <svg className="picked" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect width="20" height="20" fill="currentColor" /><path d="M5 10.5l3.4 3.4L15 7.2" fill="none" stroke="var(--paper)" strokeWidth="2.6" strokeLinecap="square" /></svg>;
 function Ways({ path, onPath }: { path: Path; onPath: (p: Path) => void }) {
   const way = (k: Path, t: string, d: string) => <button type="button" role="radio" aria-checked={path === k} className={`way-card${path === k ? ' on' : ''}`} onClick={() => onPath(k)}>{path === k && <i className="corner-tick" aria-hidden="true" />}<b>{t}</b><span>{d}</span></button>;
+  const hybrid = path === 'hybrid';
+  const tier = (on: boolean, to: Path, t: string, d: string, which: string) => (
+    <button type="button" role="radio" aria-checked={on} className={`tier-card${on ? ' on' : ''}`} onClick={() => { if (!on) onPath(to); }}>
+      {on && <i className="corner-tick" aria-hidden="true" />}<b>{t}</b><span>{d}</span><small>{which}</small>
+    </button>
+  );
   return (
     <>
-      <h3 className="sec-head"><i>1</i>model<Info text="what your scribe thinks with. the first scribe born on an inscribed model holds that model's autograph and earns a royalty each time another scribe is born on it." /></h3>
-      <div className="way-cards" role="radiogroup" aria-label="model">
-        {way('model', 'already inscribed', 'a model on solana')}
-        {way('own', 'your own model', 'upload a .gguf')}
-        {way('folder', 'packaged folder', 'your agent can make one')}
+      <h3 className="sec-head"><i>1</i>model<Info text="what your scribe thinks with. full inscription: the model itself is written to solana and runs in the visitor's browser, with no server at all. the first scribe born on an inscribed model holds that model's autograph and earns a royalty each time another scribe is born on it. hybrid: your agent is inscribed and thinks with claude or grok. visitors get free messages each day, or use their own key." /></h3>
+      <div className="tier-cards" role="radiogroup" aria-label="tier">
+        {tier(!hybrid, 'model', 'full inscription', 'every byte on solana. the model runs in the browser.', 'qwen · smollm · stories260k')}
+        {tier(hybrid, 'hybrid', 'hybrid', 'the agent is on solana. it thinks with a hosted model.', 'claude · grok')}
       </div>
+      {!hybrid && (
+        <div className="way-cards" role="radiogroup" aria-label="model">
+          {way('model', 'already inscribed', 'a model on solana')}
+          {way('own', 'your own model', 'upload a .gguf')}
+          {way('folder', 'packaged folder', 'your agent can make one')}
+        </div>
+      )}
     </>
   );
 }
@@ -111,17 +120,18 @@ function modelHint(n: number): string {
   return 'The best on-chain brain so far: follows instructions, holds a conversation.';
 }
 
-function Builder({ own: ownPath, model, busy, onCheck, verify, onVerify, ways }: { own: boolean; model?: string; busy: boolean; onCheck: (p: Parts) => void; verify: boolean; onVerify: (v: boolean) => void; ways: ReactNode }) {
+function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify, ways }: { own: boolean; hybrid: boolean; model?: string; busy: boolean; onCheck: (p: Parts) => void; verify: boolean; onVerify: (v: boolean) => void; ways: ReactNode }) {
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [voice, setVoice] = useState('');
   const [boundaries, setBoundaries] = useState('');
   const [memory, setMemory] = useState('');
   const [tools, setTools] = useState<string[]>([]);
-  const [brain, setBrain] = useState<'existing' | 'claude' | 'own'>(ownPath ? 'own' : 'existing');
+  const brain: 'existing' | 'hybrid' | 'own' = hybrid ? 'hybrid' : ownPath ? 'own' : 'existing';
   const [models, setModels] = useState<ModelInfo[] | null>(null);
   const [modelSha, setModelSha] = useState('');
-  const [claude, setClaude] = useState(CLAUDE_MODELS[0].id);
+  const [provider, setProvider] = useState<Provider>('anthropic');
+  const [hosted, setHosted] = useState(PROVIDERS.anthropic.models[0].id);
   const [own, setOwn] = useState<File | null>(null);
   const [picture, setPicture] = useState<File | null>(null);
   const [extra, setExtra] = useState(false);
@@ -130,7 +140,6 @@ function Builder({ own: ownPath, model, busy, onCheck, verify, onVerify, ways }:
   const [pictureUrl, setPictureUrl] = useState('');
 
   useEffect(() => {
-    // No inscribed models to reuse (or no answer): start on Claude instead of a disabled choice.
     modelList().then((l: ModelInfo[]) => {
       // Largest first: the most capable model is the default (or the one asked for in the link).
       const sorted = [...l].sort((a, b) => b.parameters - a.parameters);
@@ -158,7 +167,7 @@ function Builder({ own: ownPath, model, busy, onCheck, verify, onVerify, ways }:
     if (mem.length) pers.memory = mem;
     p.personality = new File([JSON.stringify(pers, null, 2)], 'personality.json', { type: 'application/json' });
     if (brain === 'existing') p['model-ref'] = new File([modelSha], 'model-ref.txt');
-    else if (brain === 'claude') p.brain = new File([JSON.stringify({ kind: 'bound', provider: 'anthropic', model: claude })], 'brain.json');
+    else if (brain === 'hybrid') p.brain = new File([JSON.stringify({ kind: 'bound', provider, model: hosted })], 'brain.json');
     else if (own) p.model = own;
     if (picture) p.picture = picture;
     onCheck(p);
@@ -175,7 +184,23 @@ function Builder({ own: ownPath, model, busy, onCheck, verify, onVerify, ways }:
     <div className="builder">
       <div className="form">
         {ways}
-        {ownPath ? (
+        {hybrid ? (
+          <>
+            {/* the provider, then its models: the choice is all that is inscribed */}
+            <div className="model-row">
+              {(Object.keys(PROVIDERS) as Provider[]).map((k) => {
+                const on = provider === k;
+                return <button type="button" key={k} className={on ? 'on' : ''} onClick={() => { setProvider(k); setHosted(PROVIDERS[k].models[0].id); }}>{on && <i className="corner-tick" aria-hidden="true" />}<b>{PROVIDERS[k].name.toLowerCase()}</b><small>{k === 'anthropic' ? 'by anthropic' : 'by xai'}</small></button>;
+              })}
+            </div>
+            <div className="model-row sub">
+              {PROVIDERS[provider].models.map((m) => {
+                const on = hosted === m.id;
+                return <button type="button" key={m.id} className={on ? 'on' : ''} onClick={() => setHosted(m.id)}>{on && <i className="corner-tick" aria-hidden="true" />}<b>{m.short.toLowerCase()}</b><small>{m.hint.toLowerCase()}</small></button>;
+              })}
+            </div>
+          </>
+        ) : ownPath ? (
           <label className={`pic-drop${own ? ' filled' : ''}`}>
             <b>{own ? own.name.toLowerCase() : 'drop your .gguf model here, or click to choose'}</b>
             <span>{own ? `${size(own.size).toLowerCase()}, click to choose another` : 'an open model you are free to share'}</span>
@@ -187,8 +212,8 @@ function Builder({ own: ownPath, model, busy, onCheck, verify, onVerify, ways }:
               {/* the tiles keep their places while the models load, so nothing jumps in later */}
               {!models && [0, 1, 2].map((i) => <button type="button" key={i} className="ghost" disabled aria-hidden="true"><b>&nbsp;</b><small>&nbsp;</small></button>)}
               {models?.map((m) => {
-                const [t, rest] = split((m.name ?? m.fileName).toLowerCase()), on = brain === 'existing' && modelSha === m.sha256;
-                return <button type="button" key={m.sha256} className={on ? 'on' : ''} onClick={() => { setBrain('existing'); setModelSha(m.sha256); }}>{on && <i className="corner-tick" aria-hidden="true" />}<b>{t}</b><small>{rest || size(m.size).toLowerCase()}</small></button>;
+                const [t, rest] = split((m.name ?? m.fileName.replace(/\.gguf$/i, '')).toLowerCase()), on = modelSha === m.sha256;
+                return <button type="button" key={m.sha256} className={on ? 'on' : ''} onClick={() => setModelSha(m.sha256)}>{on && <i className="corner-tick" aria-hidden="true" />}<b>{t}</b><small>{rest || size(m.size).toLowerCase()}</small></button>;
               })}
             </div>
           </>
@@ -209,6 +234,13 @@ function Builder({ own: ownPath, model, busy, onCheck, verify, onVerify, ways }:
         <label className={`field ${state('boundaries', boundaries)}`}><span>boundaries <em>(rules it never breaks)</em></span>
           <textarea rows={2} maxLength={4000} placeholder="never asks for a seed phrase, never moves anyone's funds" value={boundaries} onChange={(e) => setBoundaries(e.target.value)} onBlur={leave('boundaries')} />
         </label>
+
+        {/* tools run on a hosted brain only, so they are offered on the hybrid tier */}
+        {hybrid && <>
+          <div className="field tools-field"><span>tools <em>(what it can look up, and the actions it may draft for you to approve)</em></span>
+            <ToolPicker value={tools} onChange={setTools} />
+          </div>
+        </>}
 
         <Sec n={3} t="image" />
         <div className={`pic-drop${hot ? ' hot' : ''}${picture ? ' filled' : ''}`} onClick={() => pic.current?.click()}

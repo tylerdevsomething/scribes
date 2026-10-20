@@ -17,6 +17,7 @@ import { encodeManifest, formatLink, type Brain, type FileRef, type Manifest, ty
 import { parsePersonality, wordCount } from '../../lib/src/personality.ts';
 import { birthInstruction, configAddress, modelRecord, scribeAddress, scribesProgram, ZERO_SHA } from '../../lib/src/registry.ts';
 import { traits } from '../../lib/src/rarity.ts';
+import { isProvider } from '../../lib/src/hybrid.ts';
 import type { Indexer } from './indexer.ts';
 
 export const LIMITS: Record<string, number> = {
@@ -197,6 +198,7 @@ export class Uploads {
       try {
         const j = JSON.parse(readFileSync(b.path, 'utf8'));
         if (j.kind !== 'bound' || typeof j.provider !== 'string' || typeof j.model !== 'string') throw new Error('brain.json must be {"kind":"bound","provider":"…","model":"…"}');
+        if (!isProvider(j.provider)) throw new Error('brain.json provider must be "anthropic" (Claude) or "xai" (Grok)');
         brain = { kind: 'bound', provider: j.provider, model: j.model };
       } catch (e) {
         problems.push(`Brain: ${(e as Error).message}`);

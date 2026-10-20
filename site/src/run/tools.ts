@@ -15,6 +15,7 @@ import { buyInstruction, listInstruction, scribesProgram } from '../../../lib/sr
 import { fileUrl, getScribe, getScribes, type ScribeView } from '../api.ts';
 import { MARKET_TOOLS, runMarketTool } from './market.ts';
 import { hostedCall } from './bound.ts';
+import { hostedGrokCall } from './grok.ts';
 export { enabledTools, OFFICIAL_TOOLS } from '../../../lib/src/tools.ts';
 
 const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
@@ -130,13 +131,18 @@ export async function runTool(name: string, input: unknown, ctx: ToolContext): P
       const question = String(o.question ?? '').trim();
       if (!question) throw new Error('question is required');
       if (target.address === ctx.scribe.address) return 'That is you.';
-      if (target.brain?.kind !== 'bound' || target.brain.provider !== 'anthropic') {
+      if (target.brain?.kind !== 'bound' || (target.brain.provider !== 'anthropic' && target.brain.provider !== 'xai')) {
         return `${target.name} thinks with an inscribed model that only runs on its own page, so it cannot be consulted from here. Suggest the person visits it.`;
       }
       const pref = target.files.find((f) => f.role === 'personality');
       if (!pref) throw new Error(`${target.name} has no personality yet`);
       const p = parsePersonality(await fetch(fileUrl(pref.sha256)).then((r) => r.text()));
       const ask = `(${ctx.scribe.name}, another scribe, is consulting you on behalf of a person. Answer briefly.)\n\n${question}`;
+      // A Grok scribe is asked through the free brain (the viewer's key here, if any, is for this scribe's provider).
+      if (target.brain.provider === 'xai') {
+        const g = await hostedGrokCall(target.address, [{ role: 'user', content: ask }], () => {});
+        return `${target.name} (#${target.birthNumber + 1}) answers: ${g.content.trim() || '(no answer)'}`;
+      }
       // With the viewer's key: call Claude directly. On the free brain: ask through the server (it uses the
       // other scribe's own inscribed personality).
       const res = ctx.client

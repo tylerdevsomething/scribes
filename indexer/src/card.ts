@@ -5,15 +5,11 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import { sigilMarkup } from '../../lib/src/sigil.ts';
+import { modelName } from '../../lib/src/hybrid.ts';
 import type { Indexer, ScribeView } from './indexer.ts';
 
 const FONTS = ['Fraunces-SemiBold.ttf', 'Inter-Regular.ttf', 'Inter-SemiBold.ttf'].map((f) => join(import.meta.dirname, '..', 'fonts', f));
 const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
-
-function modelName(id: string): string {
-  const m = /^claude-([a-z]+)-(\d+)-(\d+)$/.exec(id);
-  return m ? `Claude ${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}.${m[3]}` : id;
-}
 
 export function brainText(s: ScribeView): string {
   if (s.brain?.kind === 'bound') return `Thinks with ${modelName(s.brain.model)}`;
