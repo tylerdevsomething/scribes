@@ -21,6 +21,7 @@ export function ModelsPage() {
   const [list, setList] = useState<ModelInfo[] | null>(null);
   const [tags, setTags] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
+  // the royalty starts at the launch value (0.01 SOL) so the paragraph never re-wraps when the real one arrives
   const [royalty, setRoyalty] = useState<number | null>(null);
   useEffect(() => { fetch(`${API}/settings`).then((r) => r.json()).then((s) => setRoyalty(s.modelRoyalty ?? null)).catch(() => {}); }, []);
   useEffect(() => {
@@ -41,7 +42,7 @@ export function ModelsPage() {
         <div className="models-paras">
           <h1 className="hero-title">models inscribed on solana</h1>
           <p>Every byte of these models is written to Solana. A scribe downloads its model, checks it against the hash on chain and runs it in your browser, with no server and no API key.</p>
-          <p>The first scribe born on a model holds its autograph<Info text="the autograph belongs to the first scribe born on a model. whoever owns that scribe earns the model's royalty." />. Every later scribe on that model pays{royalty ? ` a ${sol(royalty)} SOL` : ' a'} royalty to whoever owns the autograph, and the right moves with it when sold.</p>
+          <p>The first scribe born on a model holds its autograph<Info text="the autograph belongs to the first scribe born on a model. whoever owns that scribe earns the model's royalty." />. Every later scribe on that model pays a {sol(royalty ?? 1e7)} SOL royalty to whoever owns the autograph, and the right moves with it when sold.</p>
         </div>
         {error && <div className="notice bad">{error}</div>}
         {wait && !error && <Loading />}

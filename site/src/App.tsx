@@ -61,7 +61,7 @@ export function App() {
     <>
       <header className={`top${home ? (past ? ' home in' : ' home') : ''}`}>
         <div className="wrap">
-          <a className="brand" href="#/" aria-label="scribes"><img src="/favicon.svg?v=3" width={34} height={34} alt="" /></a>
+          <a className="brand" href="#/" aria-label="scribes"><img src="/favicon.svg?v=4" width={34} height={34} alt="" /></a>
           <nav className="main">
             <a className={on('')} href="#/">Overview</a>
             <a className={on('explore') || on('scribe')} href="#/explore">Browse</a>

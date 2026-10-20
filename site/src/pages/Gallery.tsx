@@ -18,6 +18,7 @@ const CORONER = CLUSTER === 'devnet' ? '4utJNkNtrFDKuXS9tq6Rqmwbk8L8LKRLhpPKCZ69
 // Scribes to show as verified for a design preview. Empty: only scribes verified on chain get the gold look.
 const SHOW_VERIFIED: string[] = [];
 export const isVerified = (s: ScribeView) => s.verified || SHOW_VERIFIED.includes(s.address);
+const isListed = (s: ScribeView) => !!s.listing;
 
 // knight: the home page shows every scribe as its own dotted knight, in place of its seal or its picture
 export function Portrait({ s, knight }: { s: ScribeView; knight?: boolean }) {
@@ -74,8 +75,13 @@ export function ScribeCard({ s, knight, market }: { s: ScribeView; knight?: bool
         <Badges s={s} />
         {/* on browse every card reads like a market listing: its price, and a buy button on hover */}
       </div>
-      {/* under each browse card, a bar the card's width: blue with the price when listed, ink when not */}
-      {market && <span className={`mk-bar${s.listing ? ' on' : ''}`}>{s.listing ? `listed, ${sol(s.listing.price)} sol` : 'not listed'}</span>}
+      {/* under each browse card, two halves: the listing (ink frame when not listed, red when listed, gold when a verified scribe is listed) and view */}
+      {market && (
+        <span className="mk-row">
+          <span className={`mk-bar${isListed(s) ? ` on${isVerified(s) ? ' gold' : ''}` : ''}`}>{isListed(s) ? `listed, ${sol(s.listing!.price)} sol` : 'not listed'}</span>
+          <span className="mk-view">view</span>
+        </span>
+      )}
     </a>
   );
 }
@@ -328,7 +334,7 @@ export function Gallery({ mode = 'home' }: { mode?: 'home' | 'explore' }) {
         <div className="scene scene-verified">
           <div className="vs-table">
             <h2><span className="gold-text">verification</span> <VerifiedMark size={26} /></h2>
-            <p>Verifying burns a set amount of $SCRIBES from the owner's wallet. Burned tokens are gone permanently, so every verified scribe is a deflationary burn written into the program itself.</p>
+            <p>Verifying burns 50,000 $SCRIBES from the owner's wallet. Burned tokens are gone permanently, so every verified scribe is a deflationary burn written into the program itself.</p>
             <table>
               <thead><tr><th /><th>unverified</th><th><span className="gold-text">verified</span></th></tr></thead>
               <tbody>
@@ -336,7 +342,7 @@ export function Gallery({ mode = 'home' }: { mode?: 'home' | 'explore' }) {
                 <tr><td>tested</td><td>not yet</td><td><span className="gold-cut">answered the verification bot's test question</span></td></tr>
                 <tr><td>on its card</td><td>its usual frame</td><td><span className="gold-cut">a gold foil frame and the verified checkmark</span></td></tr>
                 <tr><td>rarity</td><td>the common value</td><td><span className="gold-cut">the rare value, and it counts double</span></td></tr>
-                <tr><td>$SCRIBES</td><td>none burned</td><td><span className="gold-cut">a set amount burned permanently</span></td></tr>
+                <tr><td>$SCRIBES</td><td>none burned</td><td><span className="gold-cut">50,000 burned permanently</span></td></tr>
               </tbody>
             </table>
           </div>
@@ -466,6 +472,7 @@ function Group({ title, options, value, onChange, kind, all }: { title: string; 
 
 const FAQ: [string, string][] = [
   ['Do I need a wallet to run a scribe?', 'No. Open any scribe and run it. Claude scribes have free messages every day. Scribes that carry their own model weights run in your browser and cost nothing to talk to. A wallet is only needed to own, sell or verify one.'],
+  ['What is the difference between full and hybrid inscription?', 'Full inscription writes the model weights themselves to Solana, so the scribe runs in your browser with no server at all. Qwen2.5 0.5B alone took 367,680 transactions to write. Hybrid inscribes the agent and points it at a hosted model, Claude or Grok, for about 0.0025 SOL.'],
   ['Where do inscribed model weights run?', 'On your own device. The page rebuilds the model from Solana (or a fast copy that must match the same hash), checks every file, and runs it in WebAssembly. Nothing you type is sent to a server.'],
   ['Can a scribe be changed or deleted?', 'No. Its files are written into Solana transactions and its birth record names their hashes. The owner can sell it, give it away or add journal entries, but nobody can edit what it is.'],
   ['What does it cost to inscribe one?', 'A Claude scribe is a few kilobytes: a handful of transactions and a small deposit for its record. An open model costs about 0.005 SOL per MB in fees. The Inscribe page shows the exact quote before you sign.'],

@@ -2101,3 +2101,221 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 /* inscribe, "already inscribed": a dotted rule (the ornaments' dots) between the three ways and the model tiles under them */
 .scene-create .way-cards + .model-row { position: relative; margin-top: 14px !important; padding-top: 16px;
   background: radial-gradient(circle at 1.5px 1.5px, var(--purple) .9px, transparent 1.2px) 0 0 / 3px 3px repeat-x; }
+
+/* browse: the bar under each card is two halves, the listing on the left and view on the right (solid ink) */
+.mk-row { position: absolute; left: -3px; right: -3px; top: calc(100% + 8px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.mk-row .mk-bar { position: static; height: 34px; padding: 0 4px; white-space: nowrap; text-align: center; font-size: 10px; letter-spacing: 0; }
+.mk-bar.on { background: var(--green); }
+.card:hover .mk-bar.on { background: var(--green-ink); }
+.mk-bar.on.gold, .card:hover .mk-bar.on.gold { background: #c99a33; }
+.mk-view { height: 34px; display: grid; place-items: center; background: var(--ink); color: var(--paper); font: 600 10.5px/1 var(--mono); letter-spacing: .04em; text-transform: lowercase; }
+.card:hover .mk-view { background: var(--purple); }
+
+/* inscribe, the two tiers: smaller, the same type as the rest of the form, still full width */
+.tier-card { gap: 4px; padding: 12px 30px 12px 12px; }
+.tier-card b { font: 300 18px/1.05 var(--gothic); }
+.tier-card span { font: 400 10px/1.3 var(--mono); }
+/* a dotted rule under the tiers on both tabs, and between the hybrid providers and their models, so each tab reads in three parts */
+.scene-create .tier-cards + .way-cards, .scene-create .tier-cards + .model-row, .scene-create .model-row + .model-row.sub { position: relative; margin-top: 14px !important; padding-top: 16px;
+  background: radial-gradient(circle at 1.5px 1.5px, var(--purple) .9px, transparent 1.2px) 0 0 / 3px 3px repeat-x; }
+.scene-create .model-row:has(+ .model-row.sub) { margin-bottom: 0; }
+/* inscribe: hybrid is the red mode, full inscription stays blue, so the two ways of launching read apart */
+.scene-create.hybrid { --purple: var(--green); --purple-2: var(--green-ink); }
+/* browse, view: the same ink frame as "not listed", and narrow, so the listing keeps most of the width */
+.mk-row { grid-template-columns: minmax(0, 1fr) 64px; }
+.mk-view, .card:hover .mk-view { --k: var(--ink); background: linear-gradient(var(--k), var(--k)) 0 0 / 8px 8px no-repeat border-box, linear-gradient(var(--k), var(--k)) 100% 0 / 8px 8px no-repeat border-box,
+  linear-gradient(var(--k), var(--k)) 0 100% / 8px 8px no-repeat border-box, linear-gradient(var(--k), var(--k)) 100% 100% / 8px 8px no-repeat border-box, var(--paper);
+  border: 3px solid var(--k); outline: 1px solid var(--k); outline-offset: -7px; color: var(--ink); font-size: 10px; letter-spacing: 0; }
+.card:hover .mk-view { --k: var(--purple); color: var(--purple); }
+/* listed and verified: the gold foil the verified cards use, with a gold foil edge, never a flat gold */
+.mk-bar.on.gold, .card:hover .mk-bar.on.gold { border: 3px solid transparent; color: var(--paper);
+  background: linear-gradient(rgba(207, 163, 59, .55), rgba(207, 163, 59, .55)) border-box, url(/textures/gold-foil.jpg) center / cover border-box; }
+/* inscribe, tools: every tool a framed box like the way cards above (solid when picked, with the corner tick), four across;
+   each group's name on the left of a thin rule with a plain "select all" on the right */
+.tools-field > span { display: flex; align-items: center; gap: 6px; }
+.tools-field > span .info { margin-left: auto; }
+.scene-create .toolpicker .tgroup { margin-top: 18px; }
+.scene-create .toolpicker .tgroup-head { display: flex; justify-content: space-between; align-items: center; padding: 0 0 6px; margin-bottom: 10px; border-bottom: 2px solid var(--purple); font: 600 11px/1.3 var(--mono); color: var(--ink); text-transform: lowercase; }
+.scene-create .toolpicker .tgroup-all { padding: 4px 8px; border: 2px solid var(--purple); background: var(--paper); box-shadow: none; color: var(--purple); font: 600 9.5px/1 var(--mono); text-transform: lowercase; cursor: pointer; }
+.scene-create .toolpicker .tgroup-all:hover { background: var(--purple); color: var(--paper); }
+.scene-create .tool-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.scene-create .tool-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 64px; padding: 9px 22px 9px 9px; border: 2px solid var(--ink); background: var(--paper); box-shadow: none; color: var(--ink); text-align: left; cursor: pointer; text-transform: lowercase; }
+.scene-create .tool-card:hover { border-color: var(--purple); background: var(--paper); color: var(--ink); }
+.scene-create .tool-card b { font: 300 15px/1.05 var(--gothic); }
+.scene-create .tool-card span { font: 400 9.5px/1.3 var(--mono); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.scene-create .tool-card.on, .scene-create .tool-card.on:hover { background: var(--purple); border-color: var(--purple); color: var(--paper); }
+@media (max-width: 760px) { .scene-create .tool-cards { grid-template-columns: 1fr 1fr; } }
+:is(.scene-brief, .scene-create) .toolpicker .preset.on b, :is(.scene-brief, .scene-create) .toolpicker .preset.on small { color: var(--paper); }
+/* inscribe, tools, matched to the details step: each part named in small blue with what it is in italic brackets,
+   the parts split by the dotted rule instead of a hard line, the same space above and below every rule */
+.scene-create .toolpicker .tgroup-head { border-bottom: 0; padding: 0; margin-bottom: 7px; font: 400 11px/1 var(--mono); color: var(--purple); }
+.scene-create .toolpicker .tgroup-head em { margin-left: 6px; font: italic 400 10.5px/1 var(--mono); color: var(--ink); }
+.scene-create .toolpicker .presets { margin-bottom: 0; }
+.scene-create .toolpicker .tgroup { margin-top: 16px; padding-top: 16px; background: radial-gradient(circle at 1.5px 1.5px, var(--purple) .9px, transparent 1.2px) 0 0 / 3px 3px repeat-x; }
+.scene-create .toolpicker .tgroup-all { padding: 3px 7px; border-width: 1.5px; font-size: 9px; }
+.scene-create .toolpicker { gap: 0; } .scene-create .toolpicker .presets { margin-top: 0; }
+/* connect, when the browser has no wallet: the framed box with one plain line, room around it, no options */
+.menu.wallet-menu.empty { min-width: 250px; padding: 20px 22px; }
+.wallet-menu.empty .wallet-none { margin: 0; padding: 0; background: none; color: var(--ink); font: 400 11.5px/1.7 var(--mono); text-align: center; white-space: normal; }
+.hero-words p + p { margin-top: 1.4em; }
+/* models: the two paragraphs keep one fixed width whether the cards below have loaded or not (the column used to shrink around the loader) */
+.models-paras { flex: none; align-self: center; box-sizing: border-box; }
+.models-paras p { width: min(556px, 100%); }
+@media (max-width: 760px) { .models-paras p { width: auto; } }
+.mk-row .mk-bar.on { font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; }
+.mk-row { grid-template-columns: minmax(0, 1fr) 54px; gap: 6px; } .mk-row .mk-bar { padding: 0 2px; }
+.mk-row .mk-bar, .mk-row .mk-bar.on, .mk-row .mk-view { font-size: 9.5px; letter-spacing: 0; }
+.scene-rarity > .rc { margin-top: 110px !important; } /* a pinch higher: the caption lands halfway down the words, the gaps above and below the section stay 128px */
+
+/* ===== smaller windows and phones: the same site, re-flowed instead of squeezed ===== */
+/* tablets and narrow windows: one column wherever two would crush each other */
+@media (max-width: 1100px) {
+  .scene-create .builder { grid-template-columns: minmax(0, 1fr) !important; gap: 24px; }
+  .scene-create .preview { position: static; order: -1; justify-self: center; }
+  /* the profile chat sits in the page under the profile instead of floating over it */
+  .pf-dock { position: static !important; inset: auto !important; transform: none !important; width: auto !important; max-width: 640px; margin: 24px auto 0; }
+  .pf-dock.full { height: auto !important; }
+}
+/* phones: two-row header, a slimmer frame, no ornaments over the words, centred hero */
+@media (max-width: 720px) {
+  :root { --nav-h: 92px; }
+  header.top .wrap { flex-wrap: wrap; align-content: center; row-gap: 6px; }
+  header.top .brand { top: 26px; transform: none; }
+  header.top .menu-wrap { margin-left: auto; height: 34px; display: flex; align-items: center; margin-top: 8px; }
+  nav.main { order: 3; position: static; transform: none; width: 100%; display: flex; justify-content: center; overflow-x: auto; scrollbar-width: none; }
+  nav.main::-webkit-scrollbar { display: none; }
+  nav.main a { font-size: 15px; padding: 0 6px; flex: none; height: 30px; }
+  .hero-page.stage { inset: var(--nav-h) 6px 6px; }
+  .stage .folio-body { inset: 46px 14px 40px; }
+  .hp-page canvas.orn { display: none; }
+  .scene-hero .hero-split { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 20px; }
+  .scene-hero .pc { width: 240px; }
+  .hero-words, .hero-words p, .hero-title { text-align: center !important; margin-left: auto; margin-right: auto; }
+  .hero-title { font-size: 26px !important; }
+  .hero-go { justify-content: center !important; }
+  .scene-explore-head .hero-title, .models-paras .hero-title { font-size: 26px !important; }
+  .models-paras { margin-top: 0; }
+  .scene-create .tool-cards, .scene-create .tier-cards, .scene-create .way-cards { grid-template-columns: minmax(0, 1fr) 1fr; }
+  .scene-create .toolpicker .presets { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  header.top .wrap { flex-wrap: wrap; align-content: flex-start; padding-top: 10px; }
+  header.top .brand { top: 10px; }
+  header.top .menu-wrap { margin-top: 0; }
+  nav.main { flex-wrap: nowrap; justify-content: flex-start; margin-top: 8px; padding: 0 2px; }
+  nav.main a { font-size: 13.5px; padding: 0 5px; }
+  .scroll-cue { display: none !important; }
+  .browse-top { flex-wrap: wrap !important; gap: 10px !important; }
+  .browse-top > :first-child { flex: 1 1 100% !important; width: 100% !important; min-width: 0 !important; }
+  .model-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
+.browse-top > button, .browse-top > .show-all, .browse-top > .act-btn { min-height: 40px; }
+/* get verified: "run the checks" is a small white button in the heading, beside the unverified badge */
+.panel-head:has(.run-checks) { display: flex; align-items: center; gap: 8px; }
+.panel-head .run-checks { margin-left: auto; height: 24px; padding: 0 10px; border: 0; background: var(--paper); color: #9a7020; box-shadow: none; font: 600 10px/1 var(--mono); text-transform: lowercase; cursor: pointer; }
+.panel-head .run-checks:hover:not(:disabled) { background: #fff; }
+.panel-head .chip { margin-left: 0; }
+.pf-verify .panel-head .run-checks, .panel-head .run-checks { height: 22px !important; min-height: 0 !important; padding: 0 9px !important; border: 0 !important; outline: 0 !important; background: var(--paper) !important; color: #9a7020 !important; box-shadow: none !important; font: 600 9.5px/1 var(--mono) !important; letter-spacing: 0 !important; text-shadow: none !important; }
+.pf-verify .panel-head .run-checks:hover:not(:disabled) { background: #fff !important; }
+.pf-verify .panel-head .run-checks, .panel-head .run-checks { margin-left: 0 !important; }
+.pf-verify .panel-head:has(.run-checks) { justify-content: flex-start !important; gap: 8px !important; }
+
+/* profile, get verified: the page colour with a gold frame, a gold foil title and gold foil buttons; the checks are small
+   red tick lines like the chat checks (the thing checked in red, a comma, the rest in ink); the box keeps one height */
+.pf-verify .panel { color: var(--ink); background:
+    linear-gradient(#c99a33, #c99a33) 0 0 / 8px 8px no-repeat border-box, linear-gradient(#c99a33, #c99a33) 100% 0 / 8px 8px no-repeat border-box,
+    linear-gradient(#c99a33, #c99a33) 0 100% / 8px 8px no-repeat border-box, linear-gradient(#c99a33, #c99a33) 100% 100% / 8px 8px no-repeat border-box, var(--paper) !important;
+  border-color: #c99a33 !important; outline-color: #c99a33 !important; height: 290px; box-sizing: border-box; display: flex; flex-direction: column; }
+.pf-verify .panel-head { border-bottom-color: #c99a33 !important; }
+.pf-verify .panel-head h3.gold-text { color: transparent !important; text-shadow: none !important; }
+.pf-verify .muted, .pf-verify p, .pf-verify b { color: var(--ink) !important; text-shadow: none !important; }
+.pf-verify .chip { background: var(--paper); color: #9a7020; border: 1.5px solid #c99a33; }
+.pf-verify .panel-head .run-checks, .pf-verify .verify-go { border: 0 !important; color: var(--paper) !important; text-shadow: 0 1px 0 rgba(90, 55, 0, .5) !important;
+  background: linear-gradient(rgba(207, 163, 59, .55), rgba(207, 163, 59, .55)), url(/textures/gold-foil.jpg) center / cover !important; }
+.pf-verify .panel-head .run-checks:hover:not(:disabled), .pf-verify .verify-go:hover:not(:disabled) { filter: brightness(1.06); background: linear-gradient(rgba(207, 163, 59, .55), rgba(207, 163, 59, .55)), url(/textures/gold-foil.jpg) center / cover !important; }
+.pf-verify ul.vchecks { margin: 10px 0 0; padding: 0; list-style: none; font: 400 10.5px/1.5 var(--mono); }
+.pf-verify ul.vchecks li { position: relative; padding-left: 24px; margin: 0 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.pf-verify ul.vchecks li::before { content: "" !important; position: absolute; left: 0; top: 1px; box-sizing: border-box; width: 16px; height: 16px; border-radius: 0; background: var(--paper); box-shadow: none; border: 2px solid var(--green); }
+.pf-verify ul.vchecks li.ok::before, .pf-verify ul.vchecks li.bad::before { background: var(--green); }
+.pf-verify ul.vchecks li.ok::after { content: ""; position: absolute; left: 4.5px; top: 6px; width: 7px; height: 3.5px; border-left: 2.5px solid var(--paper); border-bottom: 2.5px solid var(--paper); transform: rotate(-45deg); }
+.pf-verify .tr-a { color: var(--green); } .pf-verify .tr-b { color: var(--ink); }
+.pf-verify p.vreply { margin: 8px 0 0 !important; font: italic 400 10px/1.5 var(--mono) !important; color: var(--ink) !important; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pf-verify p.vreply span { font-style: normal; color: #9a7020; }
+.pf-verify .vgo { margin-top: auto; padding-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-verify .verify-go { height: 30px; padding: 0 14px; box-shadow: none; font: 600 10.5px/1 var(--mono); text-transform: lowercase; cursor: pointer; }
+.pf-verify .verify-go:disabled { opacity: .55; cursor: default; }
+.pf-verify .vhold { font: 400 10px/1.4 var(--mono); color: var(--ink); }
+.pf-verify .verify-go, .pf-verify .verify-go:hover { outline: 0 !important; box-shadow: none !important; border: 0 !important; }
+.pf-verify p.vreply { white-space: normal !important; }
+.pf-verify p.vreply { display: -webkit-box !important; height: auto !important; max-height: none !important; }
+.pf-verify .panel { height: 300px; }
+.pf-verify .panel > * { flex-shrink: 0; } .pf-verify .panel { height: 320px; }
+/* get verified, tidy pass: every line the same small size as the paragraph, one even 10px gap between parts, the box's
+   padding equal on all sides, and one fixed height for every state */
+.pf-verify ul.vchecks, .pf-verify ul.vchecks li, .pf-verify ul.vchecks span { font-size: 10.5px !important; line-height: 1.6 !important; }
+.pf-verify ul.vchecks { margin: 10px 0 0 !important; }
+.pf-verify ul.vchecks li { margin: 0 0 6px !important; padding-left: 24px !important; }
+.pf-verify ul.vchecks li:last-child { margin-bottom: 0 !important; }
+.pf-verify ul.vchecks li::before { top: 0 !important; }
+.pf-verify ul.vchecks li.ok::after { top: 5px !important; }
+.pf-verify p.vreply { margin: 10px 0 0 !important; }
+.pf-verify .vgo { margin-top: auto !important; padding-top: 10px !important; gap: 12px !important; }
+.pf-verify .panel { padding: 18px !important; height: 300px !important; }
+.pf-verify .panel-head { margin-bottom: 10px !important; }
+/* get verified heading: title left; on the right the checks button then the unverified badge. the button reads as a button:
+   gold foil, a pointer arrow, a lift on hover; once the checks pass it becomes a quiet "checks passed" with a tick */
+.pf-verify .panel-head:has(.vhead-r) { justify-content: space-between !important; }
+.pf-verify .vhead-r { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.pf-verify .panel-head .run-checks { display: inline-flex !important; align-items: center; gap: 6px; height: 26px !important; padding: 0 10px 0 12px !important; cursor: pointer;
+  box-shadow: 0 2px 0 #8a6418 !important; transition: transform .1s, box-shadow .1s; }
+.pf-verify .panel-head .run-checks:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 3px 0 #8a6418 !important; }
+.pf-verify .panel-head .run-checks:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 #8a6418 !important; }
+.pf-verify .panel-head .run-checks.done { cursor: default; background: var(--paper) !important; color: #9a7020 !important; text-shadow: none !important; box-shadow: none !important; border: 1.5px solid #c99a33 !important; }
+.pf-verify .vhead-r .chip { height: 26px; display: inline-flex; align-items: center; box-sizing: border-box; }
+/* get verified, final pass: no underline shadow on the gold buttons; the box grows to fit (never cuts the verify button)
+   but never shrinks below the passed state, so it keeps one height */
+.pf-verify .panel-head .run-checks, .pf-verify .panel-head .run-checks:hover:not(:disabled), .pf-verify .panel-head .run-checks:active:not(:disabled) { box-shadow: none !important; transform: none !important; }
+.pf-verify .panel-head .run-checks:hover:not(:disabled) { filter: brightness(1.08); }
+.pf-verify .panel { height: auto !important; min-height: 300px !important; }
+.pf-verify .vgo { padding-top: 12px !important; }
+.pf-verify .verify-go { width: 100%; height: 32px !important; }
+.pf-verify .verify-go:disabled { opacity: 1 !important; filter: saturate(.7); text-shadow: 0 1px 0 rgba(90, 55, 0, .7) !important; }
+/* run the checks? on hover: the outlined look of the unverified badge (page colour, gold border, gold words), nothing else */
+.pf-verify .panel-head .run-checks:hover:not(:disabled) { filter: none !important; background: var(--paper) !important; color: #9a7020 !important; text-shadow: none !important; box-shadow: inset 0 0 0 1.5px #c99a33 !important; }
+/* get verified title: the same size and type as every other post title on the profile (rarity, capsule, files, activity) */
+.pf-verify .panel-head h3 { font-size: 22px !important; font-weight: 300 !important; letter-spacing: .03em !important; line-height: 1.2 !important; }
+.pf-verify .run-checks .q { margin-left: 1px; font-size: 14px; line-height: 1; font-weight: 700; }
+.pf-verify .panel-head .run-checks { gap: 0 !important; }
+/* get verified checks: exactly the inscribe "needs" list (11.5px mono lines, a 12 by 15 red block at the start), the tick
+   drawn as a centred character in the block the same way the "!" is, so it always sits in the middle */
+.pf-verify ul.vchecks, .pf-verify ul.vchecks li, .pf-verify ul.vchecks span { font: 400 11.5px/1.4 var(--mono) !important; }
+.pf-verify ul.vchecks li { padding: 4px 0 4px 18px !important; margin: 0 !important; }
+.pf-verify ul.vchecks li::before { content: "✓" !important; top: 4px !important; left: 0 !important; width: 12px !important; height: 15px !important; border: 0 !important;
+  font: 700 9px/15px var(--mono) !important; text-align: center; color: var(--paper); background: var(--green) !important; }
+.pf-verify ul.vchecks li.bad::before { content: "!" !important; font-size: 11px !important; }
+.pf-verify ul.vchecks li.ok::after { display: none !important; content: none !important; }
+.pf-verify ul.vchecks li { white-space: normal !important; overflow: visible !important; }
+.pf-verify .run-checks svg { display: block; flex: none; }
+.pf-verify .panel-head .run-checks.done { gap: 6px !important; }
+/* verify button: gold when the wallet holds enough $scribes, solid red when it does not */
+.pf-verify .verify-go.short, .pf-verify .verify-go.short:disabled { background: var(--green) !important; filter: none !important; text-shadow: none !important; color: var(--paper) !important; }
+/* get verified checks, final: the browse filter tick box (16px red box, the same drawn tick) and lines a step smaller
+   than the paragraph above, red name, comma, ink rest */
+.pf-verify ul.vchecks, .pf-verify ul.vchecks li, .pf-verify ul.vchecks span { font: 400 10px/16px var(--mono) !important; }
+.pf-verify ul.vchecks li { position: relative; padding: 0 0 0 24px !important; margin: 0 0 6px !important; min-height: 16px; }
+.pf-verify ul.vchecks li::before { content: "" !important; position: absolute; left: 0 !important; top: 0 !important; width: 16px !important; height: 16px !important;
+  box-sizing: border-box; border: 2px solid var(--green) !important; background: var(--green) !important; font: 0/0 a !important; }
+.pf-verify ul.vchecks li.ok::after { display: block !important; content: "" !important; position: absolute; left: 4.5px !important; top: 4px !important;
+  width: 7px !important; height: 4px !important; border-left: 2.5px solid var(--paper) !important; border-bottom: 2.5px solid var(--paper) !important; transform: rotate(-45deg); }
+.pf-verify ul.vchecks li.bad::before { background: var(--paper) !important; }
+.pf-verify .verify-go { display: flex !important; align-items: center; justify-content: center; text-align: center; }
+/* everything lowercase on screen, as elsewhere: the profile name and post titles (names come from the chain with capitals),
+   and the headings and text of the brief as shown on the brief page (the downloaded file itself is unchanged) */
+.pf-name, .pf-head h1, .panel-head h3, .pf-feed .panel-head h3, .brief-doc, .brief-doc h2, .brief-doc h3 { text-transform: lowercase; }
+/* inscribe button: the same size as the connect stamp (44px tall, 13px type, 26px sides) in every state */
+.scene-create .stamp.go { height: 44px !important; padding: 0 26px !important; font-size: 13px !important; letter-spacing: .06em !important; }
+/* inscribe preview: a small italic note under the card while no image is uploaded */
+.scene-create .preview-note { width: 160px; margin: 10px 0 0; font: italic 400 9.5px/1.5 var(--mono); color: var(--ink); text-transform: lowercase; }
+/* inscribe preview label: the word on the left, the info mark on the right edge of the card */
+.scene-create .preview-label { display: flex; align-items: center; justify-content: space-between; width: 160px; }
+.scene-create .preview-label .info-pop { left: auto; right: 0; top: 22px; width: 200px; text-align: left; }

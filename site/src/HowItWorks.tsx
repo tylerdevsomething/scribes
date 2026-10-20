@@ -112,7 +112,7 @@ export function HowItWorks() {
       <div className="flow-link fork split" />
       <div className="flow-split">
         <Step t="stays unverified" d="no burn, scored on rarity alone" open />
-        <Step t={<>verify <VerifiedMark size={18} onGold /></>} d="the bot runs it and signs a pass, you burn $SCRIBES, the record is marked permanently" red gold />
+        <Step t={<>verify <VerifiedMark size={18} onGold /></>} d="the bot runs it and signs a pass, you burn 50,000 $SCRIBES, the record is marked permanently" red gold />
       </div>
       <div className="flow-link fork join" />
       <Step t="list and trade" d="both list on chain, the verified one carries the gold mark" />

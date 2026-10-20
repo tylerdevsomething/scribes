@@ -4,11 +4,6 @@ import { useEffect, useState } from 'react';
 import { connect, disconnect, useWallet, walletIcon, wallets } from './wallet.ts';
 import { short } from './config.ts';
 
-const INSTALL = [
-  ['Phantom', 'https://phantom.com/download'],
-  ['Solflare', 'https://solflare.com/download'],
-  ['Backpack', 'https://backpack.app/download'],
-];
 
 // The wallet's icon with only its light shapes kept, filled in the page colour (Phantom's ghost, for one).
 function Glyph({ name }: { name: string }) {
@@ -47,7 +42,7 @@ export function WalletButton() {
     <div className="menu-wrap">
       <button className="small primary" onClick={() => { setError(''); setOpen(!open); }}>Connect</button>
       {open && (
-        <div className="menu wallet-menu">
+        <div className={`menu wallet-menu${found.length === 0 ? ' empty' : ''}`}>
           <i className="c2" />
           {/* a chain link from the connect button down to the menu, like the links between blocks elsewhere */}
           <i className="wallet-link" aria-hidden="true" />
@@ -56,12 +51,8 @@ export function WalletButton() {
               try { await connect(w.provider); setOpen(false); } catch (e) { setError((e as Error).message); }
             }}><Glyph name={w.name} /><span>{w.name}</span></button>
           ))}
-          {found.length === 0 && (
-            <>
-              <p>no solana wallet found. install one, then come back.</p>
-              {INSTALL.map(([n, u]) => <a key={n} href={u} target="_blank" rel="noreferrer"><span>{n}</span></a>)}
-            </>
-          )}
+          {/* no wallet in the browser: just the one line, no options */}
+          {found.length === 0 && <p className="wallet-none">no wallet found. please install one, then come back.</p>}
           {error && <p className="wallet-error">{error}</p>}
         </div>
       )}

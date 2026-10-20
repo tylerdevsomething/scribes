@@ -79,7 +79,7 @@ export function ScribePage({ address, ask }: { address: string; ask?: string }) 
             <h1 className="hero-title pf-name">{s.name ?? 'Inscribing'}{isVerified(s) && (
               <span className="pf-vmark" tabIndex={0} aria-label="verified">
                 <VerifiedMark size={22} />
-                <span className="pf-vpop" role="tooltip">{s.name} passed the bot's checks and its owner burned $SCRIBES to verify it{s.verifiedSlot ? ` at slot ${s.verifiedSlot.toLocaleString()}` : ''}. The badge stays with the scribe for ever, whoever holds it.</span>
+                <span className="pf-vpop" role="tooltip">{s.name} passed the bot's checks and its owner burned $SCRIBES to verify it{s.verifiedSlot ? ` at slot ${s.verifiedSlot.toLocaleString()}` : ''}. The badge stays with the scribe forever, whoever holds it.</span>
               </span>
             )}</h1>
             {/* the scribe's key facts as a chain of small data blocks */}
@@ -113,7 +113,7 @@ export function ScribePage({ address, ask }: { address: string; ask?: string }) 
                   {ATTRIBUTES.map((a) => (
                     <tr key={a} className={FROM_CHAIN.includes(a) ? 'chain' : 'files'}>
                       <td>{a}</td>
-                      <td>{a === 'Model' ? (s.brain?.kind === 'bound' ? modelName(s.brain.model) : s.model?.name ?? short(s.rarity!.traits[a])) : s.rarity!.traits[a]}</td>
+                      <td>{a === 'Model' ? (s.brain?.kind === 'bound' ? modelName(s.brain.model) : s.model?.name ?? short(s.rarity!.traits[a])) : String(s.rarity!.traits[a]).replace(/\s*[–—]\s*/g, ' to ')}</td>
                       <td>{(100 * s.rarity!.shares[a]).toFixed(1)}%</td>
                     </tr>
                   ))}

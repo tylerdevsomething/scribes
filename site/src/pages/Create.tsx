@@ -60,7 +60,7 @@ export function Create({ model }: { model?: string } = {}) {
   return (
     <Folio className="folio-hero stage">
       <div className="scene scene-explore-head"><h1 className="hero-title">inscribe an ai agent</h1></div>
-      <div className="scene scene-create">
+      <div className={`scene scene-create${path === 'hybrid' ? ' hybrid' : ''}`}>
         <div className="create-col">
           {!phase && (
             <>
@@ -86,17 +86,17 @@ const PICKED = <svg className="picked" viewBox="0 0 20 20" width="18" height="18
 function Ways({ path, onPath }: { path: Path; onPath: (p: Path) => void }) {
   const way = (k: Path, t: string, d: string) => <button type="button" role="radio" aria-checked={path === k} className={`way-card${path === k ? ' on' : ''}`} onClick={() => onPath(k)}>{path === k && <i className="corner-tick" aria-hidden="true" />}<b>{t}</b><span>{d}</span></button>;
   const hybrid = path === 'hybrid';
-  const tier = (on: boolean, to: Path, t: string, d: string, which: string) => (
+  const tier = (on: boolean, to: Path, t: string, d: string) => (
     <button type="button" role="radio" aria-checked={on} className={`tier-card${on ? ' on' : ''}`} onClick={() => { if (!on) onPath(to); }}>
-      {on && <i className="corner-tick" aria-hidden="true" />}<b>{t}</b><span>{d}</span><small>{which}</small>
+      {on && <i className="corner-tick" aria-hidden="true" />}<b>{t}</b><span>{d}</span>
     </button>
   );
   return (
     <>
       <h3 className="sec-head"><i>1</i>model<Info text="what your scribe thinks with. full inscription: the model itself is written to solana and runs in the visitor's browser, with no server at all. the first scribe born on an inscribed model holds that model's autograph and earns a royalty each time another scribe is born on it. hybrid: your agent is inscribed and thinks with claude or grok. visitors get free messages each day, or use their own key." /></h3>
       <div className="tier-cards" role="radiogroup" aria-label="tier">
-        {tier(!hybrid, 'model', 'full inscription', 'every byte on solana. the model runs in the browser.', 'qwen · smollm · stories260k')}
-        {tier(hybrid, 'hybrid', 'hybrid', 'the agent is on solana. it thinks with a hosted model.', 'claude · grok')}
+        {tier(!hybrid, 'model', 'full inscription', 'every byte on solana. the model runs in the browser.')}
+        {tier(hybrid, 'hybrid', 'hybrid inscription', 'the agent is on solana. it thinks with a hosted model.')}
       </div>
       {!hybrid && (
         <div className="way-cards" role="radiogroup" aria-label="model">
@@ -163,6 +163,7 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
   // an inscribed model gets the read-only tools the page runs for it, if it is large enough to use them
   const picked = models?.find((m) => m.sha256 === modelSha);
   const pageTools = ownPath || (!hybrid && !!picked && picked.parameters >= PAGE_TOOLS_MIN_PARAMS);
+  const showTools = hybrid || pageTools;
   const brainOk = brain === 'existing' ? !!modelSha : brain === 'own' ? !!own : true;
   const ready = name.trim() && purpose.trim() && voice.trim() && boundaries.trim() && brainOk;
 
@@ -243,14 +244,15 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
           <textarea rows={2} maxLength={4000} placeholder="never asks for a seed phrase, never moves anyone's funds" value={boundaries} onChange={(e) => setBoundaries(e.target.value)} onBlur={leave('boundaries')} />
         </label>
 
-        {/* hybrid: every tool. an inscribed model large enough: the read-only tools the page runs for it */}
-        {(hybrid || pageTools) && (
-          <div className="field tools-field"><span>tools <em>{hybrid ? '(what it can look up, and the actions it may draft for you to approve)' : '(what it can look up)'}</em></span>
+        {/* hybrid: every tool. an inscribed model large enough: the read-only tools the page runs for it. its own step, after details */}
+        {showTools && (
+          <>
+            <Sec n={3} t="tools" info="the tools are built into the scribes program, so they are your agent's shortcuts and its guardrails. it can only look things up and draft actions through the tools you pick here, and nothing that moves funds happens until the visitor approves it in their own wallet." />
             <ToolPicker value={tools} onChange={setTools} only={hybrid ? undefined : PAGE_TOOLS} />
-          </div>
+          </>
         )}
 
-        <Sec n={3} t="image" />
+        <Sec n={showTools ? 4 : 3} t="image" />
         <div className={`pic-drop${hot ? ' hot' : ''}${picture ? ' filled' : ''}`} onClick={() => pic.current?.click()}
           onDragOver={(e) => { e.preventDefault(); setHot(true); }} onDragLeave={() => setHot(false)}
           onDrop={(e) => { e.preventDefault(); setHot(false); const f = e.dataTransfer.files?.[0]; if (f) setPicture(f); }}>
@@ -258,7 +260,7 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
           <input ref={pic} type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => setPicture(e.target.files?.[0] ?? null)} />
         </div>
 
-        <VerifyStep n={4} verify={verify} onVerify={onVerify} />
+        <VerifyStep n={showTools ? 5 : 4} verify={verify} onVerify={onVerify} />
 
         <div className="create-go">
           <button className={`stamp go${ready ? ' ready' : ''}${verify ? ' gold' : ''}`} disabled={!ready || busy} onClick={submit}>inscribe</button>
@@ -266,7 +268,7 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
       </div>
 
       <aside className="preview">
-        <div className="preview-label">preview</div>
+        <div className="preview-label">preview<Info text="no image? your scribe gets its own dot matrix portrait, drawn from its address at birth. the figure here is only an example." /></div>
         <div className={`card${verify ? ' verified' : ''}`}>
           <i className="card-rule" />
           <div className="art">{pictureUrl ? <img src={pictureUrl} alt="" /> : <Figure seed="waymark" n={0} bare />}</div>
@@ -282,7 +284,7 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
 
 // stand in minimum until the real token launches: devnet's config burns 10 of a test mint, which means
 // nothing beside a 1 billion supply. On mainnet the program's set amount is the minimum
-const DEFAULT_BURN = 100_000;
+const DEFAULT_BURN = 50_000;
 
 // the verify step: an on and off switch, gold when on, and how many $scribes to burn, never less than the
 // minimum. The amount's room is always kept, so nothing below it moves when the switch flips
@@ -296,17 +298,17 @@ function VerifyStep({ n, verify, onVerify }: { n: number; verify: boolean; onVer
   if (!settings?.verificationOpen) return null;
   return (
     <>
-      <h3 className="sec-head"><i>{n}</i><span className="gold-text">verify</span><VerifiedMark size={18} /><Info text="you pay in two parts. first the inscription fee in sol, shown in full before you sign. then, once your scribe is born, the verification bot runs it and checks every file, and you burn your chosen amount of $scribes in a second signature. the record is marked verified permanently and the burned tokens are gone for good." /></h3>
+      <h3 className="sec-head"><i>{n}</i><span className="gold-text">verify</span><VerifiedMark size={18} /><Info text="you pay in two parts. first the inscription fee in sol, shown in full before you sign. then, once your scribe is born, the verification bot runs it and verifies every file, and you burn your chosen amount of $scribes in a second signature. the record is marked verified permanently and the burned tokens are gone for good." /></h3>
       <button type="button" role="switch" aria-checked={verify} className={`verify-toggle${verify ? ' on' : ''}`} onClick={() => onVerify(!verify)}>
         <span className="switch" aria-hidden="true" />
-        <span><b>verification <em>(every file checked against its hash, then shown first in browse)</em></b></span>
+        <span><b>verification <em>(every file verified against its hash, then shown first in browse)</em></b></span>
       </button>
       <div className={`burn-field${verify ? '' : ' off'}`} aria-hidden={!verify}>
         <div className="amount-box">
           <input inputMode="numeric" value={typed} tabIndex={verify ? 0 : -1} aria-label="$scribes to burn"
             onChange={(e) => setBurn(e.target.value.replace(/\D/g, '').slice(0, 10))}
             onBlur={() => setBurn(String(Math.min(Math.max(amount, min), 1e9)))} />
-          <span><img src="/favicon.svg?v=3" alt="" />$scribes</span>
+          <span><img src="/favicon.svg?v=4" alt="" />$scribes</span>
         </div>
         <small className="burn-note">you burn {amount.toLocaleString()} $scribes in a second signature once your scribe is born. the minimum is {min.toLocaleString()}.<br />this is on top of the sol inscription fee.</small>
       </div>
@@ -436,7 +438,7 @@ function Uploader({ busy, onCheck, ways, verify, onVerify }: { busy: boolean; on
       </div>
 
       <aside className="preview">
-        <div className="preview-label">preview</div>
+        <div className="preview-label">preview<Info text="no image? your scribe gets its own dot matrix portrait, drawn from its address at birth. the figure here is only an example." /></div>
         <div className={`card${verify ? ' verified' : ''}`}>
           <i className="card-rule" />
           <div className="art">{imageUrl ? <img src={imageUrl} alt="" /> : <Figure seed="waymark" n={0} bare />}</div>
@@ -519,7 +521,7 @@ function Report({ report, id, onPhase }: { report: CheckReport; id: string; onPh
             {!owner && found.length === 0 && <div className="notice info">Install a Solana wallet (Phantom, Solflare or Backpack) to inscribe.</div>}
             {owner && <button className="stamp" disabled={!!busy} onClick={inscribe}>{busy ? `${busy}…` : `Inscribe for ${q && sol(q.totalLamports)} SOL`}</button>}
           </div>
-          <p className="muted" style={{ fontSize: 13.5, marginTop: 12, marginBottom: 0 }}>One signature. Once born, a scribe exists for ever — it can be given away, never deleted.</p>
+          <p className="muted" style={{ fontSize: 13.5, marginTop: 12, marginBottom: 0 }}>One signature. Once born, a scribe exists forever. It can be given away, never deleted.</p>
         </>
       )}
       {error && <div className="notice bad" style={{ marginTop: 12 }}>{error}</div>}

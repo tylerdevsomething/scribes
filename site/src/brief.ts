@@ -46,8 +46,8 @@ function deliver(o: BriefOptions): string {
 }
 
 function brainSection(o: BriefOptions): string {
-  const open = `**An open model:** include its **.gguf** file — only a model you may redistribute (Apache-2.0, MIT or similar). It is inscribed on chain and runs in any browser, so smaller is better: up to about 2 GB runs in a browser. If the same model is already on Scribes, it is reused instead of inscribed again (a small royalty goes to the owner of its first scribe); the first scribe on a newly inscribed model gets the Autograph, and with it the royalty from every later scribe on that model.`;
-  const claude = `**Claude (a bound brain):** include **brain.json**:\n\n\`\`\`json\n${BOUND}\n\`\`\`\n\nYour personality is inscribed; whoever wakes you brings their own Anthropic API key. Bound brains can use tools.`;
+  const open = `**An open model:** include its **.gguf** file, only a model you may redistribute (Apache-2.0, MIT or similar). It is inscribed on chain and runs in any browser, so smaller is better: up to about 2 GB runs in a browser. If the same model is already on Scribes, it is reused instead of inscribed again (a small royalty goes to the owner of its first scribe). The first scribe on a newly inscribed model gets the Autograph, and with it the royalty from every later scribe on that model.`;
+  const claude = `**Claude (a hosted model):** include **brain.json**:\n\n\`\`\`json\n${BOUND}\n\`\`\`\n\nYour personality is inscribed, and whoever runs you brings their own Anthropic API key. Hosted models can use tools.`;
   if (o.brain === 'open') return open;
   if (o.brain === 'claude') return claude;
   return `Choose one:\n\n- ${open}\n- ${claude.replace(/\n\n/g, '\n\n  ')}`;
@@ -60,7 +60,7 @@ export function writeBrief(o: BriefOptions): string {
         : `and either your open-model .gguf file or brain.json containing ${BOUND}`;
     const extras = [o.tools.length ? `"tools": ${JSON.stringify(o.tools)}` : '', o.memory ? '"memory": [one string per thing to remember]' : ''].filter(Boolean).join(' and ');
     const how = o.packager === 'chat' ? 'Reply with each file in its own code block headed by its file name.' : o.packager === 'self' ? 'Fill these in yourself.' : 'Write them into a folder named my-scribe.';
-    return `Package yourself as a scribe — an agent inscribed permanently on Solana. Write personality.json with "name" (up to 64 characters), "purpose", "voice" and "boundaries"${extras ? `, plus ${extras}` : ''}, in your own words — never include secrets, everything is public and permanent — ${brain}${o.picture ? ', and optionally a square image' : ''}. ${how}`;
+    return `Package yourself as a scribe, an agent inscribed permanently on Solana. Write personality.json with "name" (up to 64 characters), "purpose", "voice" and "boundaries"${extras ? `, plus ${extras}` : ''}, in your own words (never include secrets: everything is public and permanent), ${brain}${o.picture ? ', and optionally a square image' : ''}. ${how}`;
   }
 
   const parts: string[] = [];
@@ -74,10 +74,10 @@ export function writeBrief(o: BriefOptions): string {
     'Up to 4,000 characters each for purpose, voice and boundaries' + (o.memory ? '; up to 200 memory entries.' : '.'),
     'Write in plain sentences, in your own voice. Never include secrets, API keys, passwords or private data: everything here is public and permanent.',
   ];
-  if (o.tools.length) rules.push(`Tools: ${o.tools.map(TOOL_TEXT).join('; ')}. Tools run when your brain is Claude.`);
-  else rules.push(`Optional ${code('tools')}, from: ${ACTIVE_TOOLS.map((x) => code(x.name)).join(', ')}. They run when your brain is Claude. Proposal tools only draft actions: the person approves them in their own wallet, and you can never move funds yourself.`);
+  if (o.tools.length) rules.push(`Tools: ${o.tools.map(TOOL_TEXT).join('; ')}. Tools run when your model is Claude.`);
+  else rules.push(`Optional ${code('tools')}, from: ${ACTIVE_TOOLS.map((x) => code(x.name)).join(', ')}. They run when your model is Claude. Proposal tools only draft actions: the person approves them in their own wallet, and you can never move funds yourself.`);
   parts.push(rules.map((r) => `- ${r}`).join('\n'));
-  parts.push('## 2. Your brain (required)');
+  parts.push('## 2. Your model (required)');
   parts.push(brainSection(o));
   if (o.picture) {
     parts.push('## 3. An image (optional)');

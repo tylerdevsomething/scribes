@@ -5,7 +5,7 @@ export function Loading({ text = 'loading...' }: { text?: string }) {
   return (
     <div className="loading" role="status">
       <span className="loading-cube" aria-hidden="true">
-        <span className="lc">{['f', 'b', 'r', 'l', 't', 'u'].map((k) => <img key={k} className={`lf lf-${k}`} src="/favicon.svg?v=3" alt="" />)}</span>
+        <span className="lc">{['f', 'b', 'r', 'l', 't', 'u'].map((k) => <img key={k} className={`lf lf-${k}`} src="/favicon.svg?v=4" alt="" />)}</span>
       </span>
       <span>{text}</span>
     </div>

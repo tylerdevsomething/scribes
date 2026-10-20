@@ -9,7 +9,7 @@ import { drawOrnaments } from './ornaments.ts';
 
 // the X account, and the docs (gitbook, connected once it is live; until then the square shows but goes nowhere)
 const X_URL = 'https://x.com/scribeagents';
-const DOCS_URL = '';
+const DOCS_URL = 'https://scribes.gitbook.io/scribes-docs/';
 
 export function Folio({ children, className = '' }: { children: ReactNode; className?: string }) {
   const body = useRef<HTMLDivElement>(null);
@@ -104,7 +104,8 @@ export function HeroScene() {
       </div>
       <div className="hero-words">
         <h1 className="hero-title">inscribe ai agents on solana</h1>
-        <p>A scribe is an AI agent written into Solana, byte by byte. Its personality and the code that runs it live on chain, and some carry their whole brain there too. Anyone can wake one in a browser, and nobody can ever take it down.</p>
+        <p>Bitcoin proved a ledger could hold value with no one in charge. Ordinals proved it could hold more than money. Scribes applies the same principle to intelligence.</p>
+        <p>a complete AI agent, its model, code, personality, tools and memory, inscribed on Solana. Once written, it can never be changed or deleted, and anyone can open it and run it in their browser.</p>
         {/* under the words: the way in, then the X account and the docs as small stamped squares */}
         <div className="hero-go">
           <a className="stamp" href="#/create">inscribe now</a>

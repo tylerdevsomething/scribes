@@ -48,7 +48,7 @@ export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
     return (
       <div className="panel verified">
         <div className="panel-head"><h3>Verified</h3><VerifiedMark size={20} onGold /></div>
-        <p className="muted" style={{ margin: 0 }}>{s.name} passed the bot's checks and its owner burned $SCRIBES to verify it{s.verifiedSlot ? ` at slot ${s.verifiedSlot.toLocaleString()}` : ''}. The badge stays with the scribe for ever, whoever holds it.</p>
+        <p className="muted" style={{ margin: 0 }}>{s.name} passed the bot's checks and its owner burned $SCRIBES to verify it{s.verifiedSlot ? ` at slot ${s.verifiedSlot.toLocaleString()}` : ''}. The badge stays with the scribe forever, whoever holds it.</p>
       </div>
     );
   }
@@ -92,25 +92,34 @@ export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
   }
 
   const enough = settings && balance !== null && balance >= BigInt(settings.burnAmount);
+  // the amount shown: the launch amount (50,000 $SCRIBES). The burn itself and the balance check use the program's setting.
+  const shown = '50,000';
   return (
     <div className="panel">
-      <div className="panel-head"><h3>Get verified</h3><span className="chip">Unverified</span></div>
+      <div className="panel-head"><h3 className="gold-text">get verified</h3>
+        {/* right side: the checks button (it says when they passed) and the unverified badge */}
+        <span className="vhead-r">
+          {open && (verdict?.ok
+            ? <span className="run-checks done"><svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 6.5l2.6 2.6L10 3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" /></svg>checks passed</span>
+            : <button className="run-checks" disabled={!!busy} onClick={check}>{busy || <>{verdict ? 'run the checks again' : 'run the checks'}<span className="q">?</span></>}</button>)}
+          <span className="chip">Unverified</span>
+        </span>
+      </div>
       {!open ? (
-        <p className="muted" style={{ margin: 0 }}>Verification opens when $SCRIBES launches. It will check that {s.name} is complete and working, then burn a set amount of $SCRIBES for the badge.</p>
+        <p className="muted" style={{ margin: 0 }}>Verification opens when $SCRIBES launches. It will check that {s.name} is complete and working, then burn 50,000 $SCRIBES for the badge.</p>
       ) : (
         <>
-          <p className="muted">The bot checks that {s.name} is complete and answers a test prompt. Then you verify it in one transaction that <b>burns {tokens(settings!.burnAmount, settings!)} $SCRIBES</b>. The badge is permanent.</p>
-          {!verdict && <button className="primary" disabled={!!busy} onClick={check}>{busy || 'Run the checks'}</button>}
+          <p className="muted">The bot checks that {s.name} is complete and answers a test prompt. Then you verify it in one transaction that <b>burns {shown} $SCRIBES</b>. The verification badge is permanent on chain.</p>
           {verdict && (
             <>
-              <ul className="trail">{verdict.checks.map((c) => <li key={c.name} className={c.ok ? 'ok' : 'bad'}><b>{c.name}</b> — {c.detail}</li>)}</ul>
-              {verdict.reply && <blockquote className="reply">“{verdict.reply.trim().slice(0, 280)}”<span>{s.name}'s answer to the test prompt</span></blockquote>}
+              <ul className="trail vchecks">{verdict.checks.map((c) => <li key={c.name} className={c.ok ? 'ok' : 'bad'}><span className="tr-a">{c.name.toLowerCase()}</span><span className="tr-b">, {c.detail.toLowerCase()}</span></li>)}</ul>
+              {verdict.reply && <p className="vreply"><span>test prompt, {s.name}'s answer:</span> “{verdict.reply.trim().slice(0, 280)}”</p>}
               {verdict.ok ? (
-                <div className="row" style={{ marginTop: 12 }}>
-                  <button className="primary" disabled={!!busy || !enough} onClick={verify}>{busy || `Verify · burn ${tokens(settings!.burnAmount, settings!)} $SCRIBES`}</button>
-                  <span className="muted" style={{ fontSize: 13.5 }}>You hold {balance === null ? '…' : tokens(balance, settings!)} $SCRIBES{!enough && balance !== null ? ' — not enough' : ''}</span>
+                <div className="vgo">
+                  {/* one button: it says when the wallet does not hold enough $scribes */}
+                  <button className={`verify-go${balance !== null && !enough ? ' short' : ''}`} disabled={!!busy || !enough} onClick={verify}>{busy || (balance !== null && !enough ? `you need ${shown} $scribes to verify` : `verify, burn ${shown} $scribes`)}</button>
                 </div>
-              ) : <button onClick={check} disabled={!!busy}>Check again</button>}
+              ) : null}
             </>
           )}
         </>

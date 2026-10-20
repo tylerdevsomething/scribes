@@ -7,4 +7,5 @@ target/
 .anchor/
 test-ledger/
 scribes-frontend/
+scribes-frontend-*/
 site/vite.local.config.ts
