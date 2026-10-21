@@ -12,7 +12,7 @@ import { VerifiedMark } from '../Figure.tsx';
 
 const program = scribesProgram(conn);
 
-interface Verdict {
+export interface Verdict {
   ok: boolean;
   checks: { name: string; ok: boolean; detail: string }[];
   reply: string | null;
@@ -23,6 +23,33 @@ export function tokens(base: string | bigint, s: Settings): string {
   const d = s.token?.decimals ?? 0;
   const n = Number(BigInt(base)) / 10 ** d;
   return n.toLocaleString(undefined, { maximumFractionDigits: d });
+}
+
+// the bot's checks on a born scribe; a passing one comes back with the verifier's signed pass
+export async function runChecks(address: string): Promise<Verdict> {
+  const r = await fetch(`${API}/verify/${address}`, { method: 'POST' });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error);
+  return j;
+}
+
+// the owner's verify transaction: the verifier's pass and the program's verify instruction, which burns the set
+// amount of $SCRIBE. Returns the signature.
+export async function burnToVerify(me: string, address: string, pass: NonNullable<Verdict['pass']>, settings: Settings): Promise<string> {
+  const mint = new PublicKey(settings.burnMint!);
+  const tokenProgram = new PublicKey(settings.token!.program);
+  const owner = new PublicKey(me);
+  const b64 = (x: string) => Uint8Array.from(atob(x), (c) => c.charCodeAt(0));
+  const ed = Ed25519Program.createInstructionWithPublicKey({ publicKey: new PublicKey(pass.verifier).toBytes(), message: b64(pass.message), signature: b64(pass.signature) });
+  const ix = await verifyInstruction(program, { owner, scribe: address, mint, tokenProgram, ownerTokens: getAssociatedTokenAddressSync(mint, owner, false, tokenProgram) });
+  return sendInstructions([ed, ix]);
+}
+
+// how many base units of the burn token a wallet holds
+export async function burnBalance(me: string, settings: Settings): Promise<bigint> {
+  const mint = new PublicKey(settings.burnMint!);
+  const ata = getAssociatedTokenAddressSync(mint, new PublicKey(me), false, new PublicKey(settings.token!.program));
+  return conn.getTokenAccountBalance(ata).then((b) => BigInt(b.value.amount)).catch(() => 0n);
 }
 
 export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => void }) {
@@ -39,9 +66,7 @@ export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
 
   useEffect(() => {
     if (!me || !open) return;
-    const mint = new PublicKey(settings!.burnMint!);
-    const ata = getAssociatedTokenAddressSync(mint, new PublicKey(me), false, new PublicKey(settings!.token!.program));
-    conn.getTokenAccountBalance(ata).then((b) => setBalance(BigInt(b.value.amount))).catch(() => setBalance(0n));
+    burnBalance(me, settings!).then(setBalance);
   }, [me, open, settings, sig]);
 
   if (s.verified) {
@@ -58,10 +83,7 @@ export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
     setError('');
     setBusy('The bot is checking');
     try {
-      const r = await fetch(`${API}/verify/${s.address}`, { method: 'POST' });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error);
-      setVerdict(j);
+      setVerdict(await runChecks(s.address));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -74,15 +96,7 @@ export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
     setError('');
     setBusy('Verifying');
     try {
-      const mint = new PublicKey(settings.burnMint);
-      const tokenProgram = new PublicKey(settings.token.program);
-      const owner = new PublicKey(me);
-      const b64 = (x: string) => Uint8Array.from(atob(x), (c) => c.charCodeAt(0));
-      const pass = Ed25519Program.createInstructionWithPublicKey({
-        publicKey: new PublicKey(verdict.pass.verifier).toBytes(), message: b64(verdict.pass.message), signature: b64(verdict.pass.signature),
-      });
-      const ix = await verifyInstruction(program, { owner, scribe: s.address, mint, tokenProgram, ownerTokens: getAssociatedTokenAddressSync(mint, owner, false, tokenProgram) });
-      setSig(await sendInstructions([pass, ix]));
+      setSig(await burnToVerify(me, s.address, verdict.pass, settings));
       setTimeout(onChange, 1500);
     } catch (e) {
       setError((e as Error).message);

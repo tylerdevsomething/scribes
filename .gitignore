@@ -8,4 +8,5 @@ target/
 test-ledger/
 scribes-frontend/
 scribes-frontend-*/
+scribes-inscribe-flow-*/
 site/vite.local.config.ts
