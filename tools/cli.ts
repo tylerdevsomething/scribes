@@ -10,7 +10,7 @@
 //   node tools/cli.ts test-token --key <admin.json> --rpc <url> [--burn 10] [--verifier <pk>] [--mint <existing mint> | --mint-authority <pk>] [--to <pk> --amount 100]   (not mainnet)
 //   node tools/cli.ts give     --key <owner.json> --rpc <url> --scribe <address> --to <pk>
 //   node tools/cli.ts handover --key <admin.json> --rpc <url> --admin <pk> [--fee-receiver <pk>]   (settings stay as they are otherwise)
-//   node tools/cli.ts token    --rpc <url> (--mint <token> | --creator <wallet> | --launch-tx <sig>) --burn <whole tokens>
+//   node tools/cli.ts token    --rpc <url> (--mint <token> | --creator <wallet> | --launch-tx <sig>) --burn <whole tokens> [--verifier <pk>]
 //                              [--key <admin.json> | --propose <member.json> --multisig <pk> [--dry-run]]   (neither: prints the multisig's transaction)
 //   (inscribe registers the scribe with the program at the end; --no-birth skips that)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -318,15 +318,17 @@ async function main() {
     if (!info) throw new Error(`no account at ${mint.toBase58()}`);
     const { decimals, supply } = await getMint(conn, mint, 'confirmed', info.owner);
     const burn = BigInt(need(a, 'burn')) * 10n ** BigInt(decimals);
+    const verifier = new PublicKey(a.verifier ?? c.verifier); // --verifier also replaces the bot's key
     const settings = settingsArg({
-      admin, verifier: new PublicKey(c.verifier), feeReceiver: new PublicKey(c.feeReceiver),
+      admin, verifier, feeReceiver: new PublicKey(c.feeReceiver),
       birthFee: c.birthFee, burnMint: mint, burnAmount: burn, modelRoyalty: c.modelRoyalty,
     });
     const ix = await program.methods.setSettings(settings).accountsPartial({ admin, config: configAddress() }).instruction();
     const kind = info.owner.equals(TOKEN_2022_PROGRAM_ID) ? 'Token-2022' : info.owner.equals(TOKEN_PROGRAM_ID) ? 'SPL Token' : info.owner.toBase58();
     console.log(`token ${mint.toBase58()} · ${kind} · ${decimals} decimals · supply ${(supply / 10n ** BigInt(decimals)).toLocaleString()}`);
     console.log(`burn ${BigInt(a.burn).toLocaleString()} tokens (${burn} base units) per verification`);
-    console.log(`kept: admin ${admin.toBase58()} · verifier ${c.verifier} · fees to ${c.feeReceiver} · birth fee ${c.birthFee} lamports · royalty ${c.modelRoyalty} lamports`);
+    if (a.verifier) console.log(`verifier ${c.verifier} -> ${a.verifier}`);
+    console.log(`kept: admin ${admin.toBase58()}${a.verifier ? '' : ` · verifier ${c.verifier}`} · fees to ${c.feeReceiver} · birth fee ${c.birthFee} lamports · royalty ${c.modelRoyalty} lamports`);
     if (a.key) {
       const key = loadKey(a.key);
       if (!key.publicKey.equals(admin)) throw new Error(`--key is not the admin (${admin.toBase58()})`);
