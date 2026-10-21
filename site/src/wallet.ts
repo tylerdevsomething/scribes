@@ -6,8 +6,9 @@ import { conn } from './config.ts';
 
 interface Injected {
   publicKey?: { toBase58(): string } | null;
-  connect(): Promise<{ publicKey: { toBase58(): string } } | void>;
+  connect(opts?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toBase58(): string } } | void>;
   disconnect?(): Promise<void>;
+  on?(event: string, f: (x?: unknown) => void): void;
   signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T>;
 }
 
@@ -34,23 +35,78 @@ export function wallets(): { name: string; provider: Injected }[] {
 let current: Injected | null = null;
 let address: string | null = null;
 const listeners = new Set<(a: string | null) => void>();
+const set = (a: string | null) => { address = a; listeners.forEach((f) => f(a)); };
 
-export async function connect(provider: Injected): Promise<PublicKey> {
-  const r = await provider.connect();
+// the wallet last connected is remembered in this browser, so a reload or a new page reconnects to it quietly
+const KEPT = 'scribes-wallet';
+const keep = (name: string | null) => { try { if (name) localStorage.setItem(KEPT, name); else localStorage.removeItem(KEPT); } catch {} };
+const kept = (): string | null => { try { return localStorage.getItem(KEPT); } catch { return null; } };
+const watched = new WeakSet<Injected>();
+
+export async function connect(provider: Injected, quiet = false): Promise<PublicKey> {
+  const r = await provider.connect(quiet ? { onlyIfTrusted: true } : undefined);
   const key = (r && 'publicKey' in r ? r.publicKey : provider.publicKey);
   if (!key) throw new Error('the wallet did not share an address');
   current = provider;
-  address = key.toBase58();
-  listeners.forEach((f) => f(address));
-  return new PublicKey(address);
+  const name = wallets().find((w) => w.provider === provider)?.name;
+  if (name) keep(name);
+  if (!watched.has(provider)) {
+    watched.add(provider);
+    // a switched account follows; a lost connection (the wallet locked, the page slept) tries to come back quietly
+    provider.on?.('accountChanged', (k) => {
+      if (current !== provider) return;
+      if (k && typeof (k as { toBase58?: unknown }).toBase58 === 'function') set((k as { toBase58(): string }).toBase58());
+      else provider.connect({ onlyIfTrusted: true }).then(() => { if (current === provider && provider.publicKey) set(provider.publicKey.toBase58()); }).catch(() => {});
+    });
+    provider.on?.('disconnect', () => {
+      if (current !== provider) return;
+      provider.connect({ onlyIfTrusted: true }).then(() => { if (current === provider && provider.publicKey) set(provider.publicKey.toBase58()); else { current = null; set(null); } })
+        .catch(() => { if (current === provider) { current = null; set(null); } });
+    });
+  }
+  set(key.toBase58());
+  return new PublicKey(address!);
 }
 
+// only an explicit disconnect forgets the wallet
 export async function disconnect() {
-  await current?.disconnect?.().catch(() => {});
+  const was = current;
   current = null;
-  address = null;
-  listeners.forEach((f) => f(null));
+  keep(null);
+  set(null);
+  await was?.disconnect?.().catch(() => {});
 }
+
+// on load: reconnect quietly to the remembered wallet, waiting a moment for the extension to inject itself
+if (typeof window !== 'undefined' && kept()) {
+  let tries = 0;
+  const again = () => {
+    if (address || !kept()) return;
+    const w = wallets().find((x) => x.name === kept());
+    if (w) connect(w.provider, true).catch(() => {});
+    else if (++tries < 20) setTimeout(again, 250);
+  };
+  setTimeout(again, 0);
+}
+
+export const currentAddress = (): string | null => address;
+
+// a wallet for an action that needs one (the inscribe button): the connected one, else the remembered or only
+// wallet in this browser, else the header's wallet menu opens and this waits for a choice
+let picker: (() => void) | null = null;
+let picked: { ok: (a: string) => void; no: (e: Error) => void } | null = null;
+export function onPick(open: (() => void) | null) { picker = open; }
+export function pickClosed() { picked?.no(new Error('connect a wallet to inscribe')); picked = null; }
+export async function ensureWallet(): Promise<string> {
+  if (address) return address;
+  const found = wallets();
+  if (found.length === 0) throw new Error('install a solana wallet (phantom, solflare or backpack) to inscribe');
+  const w = found.find((x) => x.name === kept()) ?? (found.length === 1 ? found[0] : null);
+  if (w || !picker) return (await connect((w ?? found[0]).provider)).toBase58();
+  picked?.no(new Error('connect a wallet to inscribe'));
+  return new Promise((ok, no) => { picked = { ok, no }; picker!(); });
+}
+listeners.add((a) => { if (a && picked) { picked.ok(a); picked = null; } });
 
 export function useWallet(): string | null {
   const [a, setA] = useState(address);

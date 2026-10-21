@@ -71,7 +71,7 @@ export function App() {
             <a className={on('brief')} href="#/brief">Brief</a>
             <a className={on('me')} href="#/me">My scribes</a>
           </nav>
-          <WalletButton />
+          <WalletButton main />
         </div>
       </header>
       <main className="wrap"><Boundary page={path}>{page}</Boundary></main>

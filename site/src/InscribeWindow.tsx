@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CheckReport, ScribeView, UploadPhase } from './api.ts';
 import { getScribe } from './api.ts';
 import { explorer, sol } from './config.ts';
-import { connect, useWallet, wallets } from './wallet.ts';
+import { useWallet, wallets } from './wallet.ts';
 import { useSettings } from './settings.ts';
 import { Figure, VerifiedMark, portrait } from './Figure.tsx';
 import { sealColour } from './Sigil.tsx';
@@ -153,11 +153,11 @@ export function InscribeWindow({ name, purpose, checking, error, report, phase, 
   }
 
   // the one button at the foot, for whatever comes next
-  const found = wallets();
+  const found = wallets(); // signing connects one first when none is connected
   let foot: React.ReactNode = null;
   if (report && !report.ok) foot = <button className="iw-go" onClick={onClose}>change and try again</button>;
-  else if (report?.ok && !phase) foot = !me
-    ? (found.length ? found.map((w) => <button key={w.name} className="iw-go" onClick={() => connect(w.provider).catch((e) => setFault(e.message))}>connect {w.name.toLowerCase()}</button>) : <span className="iw-note">install a solana wallet to inscribe</span>)
+  else if (report?.ok && !phase) foot = !me && !found.length
+    ? <span className="iw-note">install a solana wallet to inscribe</span>
     : <button className="iw-go" disabled={!!busy} onClick={sign}>{busy || `inscribe for ${report.quote ? sol(report.quote.totalLamports) : ''} sol`}</button>;
   else if (done && verify && !burned) foot = !verdict
     ? <button className="iw-go" disabled>running the checks</button>

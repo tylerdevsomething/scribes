@@ -4,7 +4,7 @@ import { checkUpload, checkout, getScribe, newUpload, putPart, submitted, upload
 import { burnBalance, burnToVerify, runChecks, tokens } from './Verify.tsx';
 import { VerifiedMark } from '../Figure.tsx';
 import { API, CLUSTER, conn } from '../config.ts';
-import { signTransaction, useWallet } from '../wallet.ts';
+import { currentAddress, ensureWallet, signTransaction, useWallet } from '../wallet.ts';
 import { Sigil } from '../Sigil.tsx';
 import { Folio } from '../Hero.tsx';
 import { Figure } from '../Figure.tsx';
@@ -39,13 +39,13 @@ export function Create({ model }: { model?: string } = {}) {
   const [win, setWin] = useState(false);
   const [who, setWho] = useState({ name: '', purpose: '' });
   const settings = useSettings();
-  const owner = useWallet();
 
   // what the window calls: the same checkout, record and verification calls as before
   const drive = useMemo<Drive>(() => ({
     async sign() {
-      if (!owner || !id) throw new Error('connect a wallet first');
-      const { tx } = await checkout(id, owner);
+      const me = currentAddress() ?? await ensureWallet();
+      if (!id) throw new Error('the files are not uploaded yet');
+      const { tx } = await checkout(id, me);
       const signed = await signTransaction(Transaction.from(Uint8Array.from(atob(tx), (c) => c.charCodeAt(0))));
       const sig = await conn.sendRawTransaction(signed.serialize());
       const p = await submitted(id, sig);
@@ -56,7 +56,7 @@ export function Create({ model }: { model?: string } = {}) {
     checks: runChecks,
     burn: (me, address, pass) => burnToVerify(me, address, pass, settings!),
     balance: (me) => burnBalance(me, settings!),
-  }), [id, settings, owner]);
+  }), [id, settings]);
 
   // development only: #/create?demo plays the window through a made up inscription of pip (?demo=gold verifies too)
   const demo = import.meta.env.DEV && /[?&]demo/.test(location.hash) ? (/demo=gold/.test(location.hash) ? 'gold' : 'plain') : null;
@@ -79,6 +79,10 @@ export function Create({ model }: { model?: string } = {}) {
   }, [id, phase]);
 
   async function check(p: Parts) {
+    // the inscribe button connects a wallet first when none is connected
+    if (!demo && !currentAddress()) {
+      try { await ensureWallet(); } catch (e) { setError((e as Error).message); return; }
+    }
     setParts(p);
     setError('');
     setReport(null);

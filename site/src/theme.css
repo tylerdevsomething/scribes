@@ -219,7 +219,7 @@ footer.site { background: var(--sheet-2); border-top: 3px double var(--ink); }
 body, button, .btn, .eyebrow, .kind, .chip, .slot .k, .proposal .k, .brain-tag, .tgroup-head { text-transform: lowercase; }
 .initial { text-transform: none; }
 code, pre, .mono, .dl, input, textarea, select, .bubble, .rich, a[href*="solscan"], a[href*="explorer"] { text-transform: none; }
-button[title="Disconnect"] { text-transform: none; } /* shows the wallet address */
+button.wallet-addr { text-transform: none; } /* shows the wallet address */
 
 /* the hero: one illuminated page across the full width. A frame with a lane of 0s and 1s, dot
    ornaments in the corners and crests top and bottom, the old computer typing a scribe into a chain,
@@ -355,12 +355,12 @@ main.wrap { padding-top: calc(var(--nav-h) + 3px); }
 /* the logo, top left of the header */
 header.top .brand { display: flex; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); line-height: 0; }
 header.top .brand img { display: block; }
-header.top .menu-wrap > button.primary, header.top button[title="Disconnect"] {
+header.top .menu-wrap > button.primary, header.top button.wallet-addr {
   font: 700 18px/1 var(--gothic); letter-spacing: .03em; color: #fff; background: var(--purple); border: 0;
   height: 44px; padding: 0 20px 4px; display: inline-flex; align-items: center; /* the gothic sits low, so the text is lifted to the true centre */
   box-shadow: inset 0 0 0 3px var(--purple), inset 0 0 0 4.5px #fff, inset 0 0 0 6px var(--purple), inset 0 0 0 7.5px var(--green);
 }
-header.top .menu-wrap > button.primary:hover, header.top button[title="Disconnect"]:hover { background: var(--purple-2); color: #fff; }
+header.top .menu-wrap > button.primary:hover, header.top button.wallet-addr:hover { background: var(--purple-2); color: #fff; }
 header.top .menu-wrap > button.primary:active { transform: none; }
 header.top .wrap { justify-content: flex-end; }
 
@@ -373,7 +373,7 @@ nav.main a, .btn, button, .chip, .kind, .eyebrow, .capsule, .tag-price, .seg but
   font-family: var(--mono); font-size: var(--body); letter-spacing: .02em;
 }
 nav.main a { padding: 8px 12px; font-weight: 500; }
-header.top .menu-wrap > button.primary, header.top button[title="Disconnect"] {
+header.top .menu-wrap > button.primary, header.top button.wallet-addr {
   font: 600 var(--body)/1 var(--mono); letter-spacing: .06em; height: 34px; padding: 0 16px; align-items: center;
 }
 
