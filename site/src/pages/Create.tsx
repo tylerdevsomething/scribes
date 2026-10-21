@@ -26,7 +26,7 @@ export function Create({ model }: { model?: string } = {}) {
   const [path, setPath] = useState<Path>('model');
   // verifying needs a born scribe, so it is chosen here and offered once the birth is done
   const [verifyWanted, setVerifyAfter] = useState(true);
-  // until the $SCRIBE token exists (mainnet before launch) verification is closed: no verify step at all
+  // until the $SCRIBES token exists (mainnet before launch) verification is closed: no verify step at all
   const verifyOpen = !!useSettings()?.verificationOpen;
   const verifyAfter = verifyWanted && verifyOpen;
   const [parts, setParts] = useState<Parts | null>(null); // set when the user asks for a check
@@ -335,7 +335,7 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
 // nothing beside a 1 billion supply. On mainnet the program's set amount is the minimum
 const DEFAULT_BURN = 50_000;
 
-// the verify step: an on and off switch, gold when on, and the $scribe it burns. The program burns exactly its
+// the verify step: an on and off switch, gold when on, and the $scribes it burns. The program burns exactly its
 // set amount, so the box shows that amount and cannot be changed. Its room is always kept, so nothing below it
 // moves when the switch flips
 function VerifyStep({ n, verify, onVerify }: { n: number; verify: boolean; onVerify: (v: boolean) => void }) {
@@ -344,17 +344,17 @@ function VerifyStep({ n, verify, onVerify }: { n: number; verify: boolean; onVer
   if (!settings?.verificationOpen) return null;
   return (
     <>
-      <h3 className="sec-head"><i>{n}</i><span className="gold-text">verify</span><VerifiedMark size={18} /><Info text={`you pay in two parts. first the inscription fee in sol, shown in full before you sign. then, once your scribe is born, the verification bot runs it and verifies every file, and you burn ${amount.toLocaleString()} $scribe in a second signature. the record is marked verified permanently and the burned tokens are gone for good.`} /></h3>
+      <h3 className="sec-head"><i>{n}</i><span className="gold-text">verify</span><VerifiedMark size={18} /><Info text={`you pay in two parts. first the inscription fee in sol, shown in full before you sign. then, once your scribe is born, the verification bot runs it and verifies every file, and you burn ${amount.toLocaleString()} $scribes in a second signature. the record is marked verified permanently and the burned tokens are gone for good.`} /></h3>
       <button type="button" role="switch" aria-checked={verify} className={`verify-toggle${verify ? ' on' : ''}`} onClick={() => onVerify(!verify)}>
         <span className="switch" aria-hidden="true" />
         <span><b>verification <em>(every file verified against its hash, then shown first in browse)</em></b></span>
       </button>
       <div className={`burn-field${verify ? '' : ' off'}`} aria-hidden={!verify}>
         <div className="amount-box">
-          <input value={amount.toLocaleString()} readOnly tabIndex={-1} aria-label="$scribe burned" />
-          <span><img src="/favicon.svg?v=4" alt="" />$scribe</span>
+          <input value={amount.toLocaleString()} readOnly tabIndex={-1} aria-label="$scribes burned" />
+          <span><img src="/favicon.svg?v=4" alt="" />$scribes</span>
         </div>
-        <small className="burn-note">you burn {amount.toLocaleString()} $scribe in a second signature once your scribe is born.<br />this is on top of the sol inscription fee.</small>
+        <small className="burn-note">you burn {amount.toLocaleString()} $scribes in a second signature once your scribe is born.<br />this is on top of the sol inscription fee.</small>
       </div>
     </>
   );

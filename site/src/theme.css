@@ -1063,7 +1063,7 @@ body, input, textarea, button { font-variant-numeric: normal; font-feature-setti
 .scene-create .preview .card .art img { width: calc(100% - 12px); height: calc(100% - 12px); margin: 6px; outline: 1px solid var(--purple); }
 .scene-create .preview .card .art img { width: calc(100% - 8px); height: calc(100% - 4px); margin: 4px 4px 0; outline: 0; }
 .scene-create .preview .card .body { height: auto; min-height: 0; } .scene-create .preview .card .purpose-line { line-height: 1.45; max-height: calc(2 * 1.45em); }
-/* the token's logo beside $scribe in the burn amount */
+/* the token's logo beside $scribes in the burn amount */
 .amount-box span { display: flex; align-items: center; gap: 6px; }
 .amount-box span img { width: 18px; height: 18px; display: block; }
 /* folder path step 2: the brief on its own, a line and its buttons; a red ! on what the folder still needs */
@@ -2297,7 +2297,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .pf-verify ul.vchecks li { white-space: normal !important; overflow: visible !important; }
 .pf-verify .run-checks svg { display: block; flex: none; }
 .pf-verify .panel-head .run-checks.done { gap: 6px !important; }
-/* verify button: gold when the wallet holds enough $scribe, solid red when it does not */
+/* verify button: gold when the wallet holds enough $scribes, solid red when it does not */
 .pf-verify .verify-go.short, .pf-verify .verify-go.short:disabled { background: var(--green) !important; filter: none !important; text-shadow: none !important; color: var(--paper) !important; }
 /* get verified checks, final: the browse filter tick box (16px red box, the same drawn tick) and lines a step smaller
    than the paragraph above, red name, comma, ink rest */

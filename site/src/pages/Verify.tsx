@@ -1,5 +1,5 @@
 // Verification on a scribe page: the bot checks the scribe, then its owner verifies it in one
-// transaction that burns $SCRIBE. Permanent: there is no way back.
+// transaction that burns $SCRIBES. Permanent: there is no way back.
 import { useEffect, useState } from 'react';
 import { Ed25519Program, PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
@@ -38,7 +38,7 @@ export async function runChecks(address: string): Promise<Verdict> {
 }
 
 // the owner's verify transaction: the verifier's pass and the program's verify instruction, which burns the set
-// amount of $SCRIBE. Returns the signature.
+// amount of $SCRIBES. Returns the signature.
 export async function burnToVerify(me: string, address: string, pass: NonNullable<Verdict['pass']>, settings: Settings): Promise<string> {
   const mint = new PublicKey(settings.burnMint!);
   const tokenProgram = new PublicKey(settings.token!.program);
@@ -77,7 +77,7 @@ export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
     return (
       <div className="panel verified">
         <div className="panel-head"><h3>Verified</h3><VerifiedMark size={20} onGold /></div>
-        <p className="muted" style={{ margin: 0 }}>{s.name} passed the bot's checks and its owner burned $SCRIBE to verify it{s.verifiedSlot ? ` at slot ${s.verifiedSlot.toLocaleString()}` : ''}. The badge stays with the scribe forever, whoever holds it.</p>
+        <p className="muted" style={{ margin: 0 }}>{s.name} passed the bot's checks and its owner burned $SCRIBES to verify it{s.verifiedSlot ? ` at slot ${s.verifiedSlot.toLocaleString()}` : ''}. The badge stays with the scribe forever, whoever holds it.</p>
       </div>
     );
   }
@@ -110,7 +110,7 @@ export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
   }
 
   const enough = settings && balance !== null && balance >= BigInt(settings.burnAmount);
-  // the amount shown: the launch amount (50,000 $SCRIBE). The burn itself and the balance check use the program's setting.
+  // the amount shown: the launch amount (50,000 $SCRIBES). The burn itself and the balance check use the program's setting.
   const shown = '50,000';
   return (
     <div className="panel">
@@ -124,18 +124,18 @@ export function VerifyPanel({ s, onChange }: { s: ScribeView; onChange: () => vo
         </span>
       </div>
       {!open ? (
-        <p className="muted" style={{ margin: 0 }}>Verification opens when $SCRIBE launches. It will check that {s.name} is complete and working, then burn 50,000 $SCRIBE for the badge.</p>
+        <p className="muted" style={{ margin: 0 }}>Verification opens when $SCRIBES launches. It will check that {s.name} is complete and working, then burn 50,000 $SCRIBES for the badge.</p>
       ) : (
         <>
-          <p className="muted">The bot checks that {s.name} is complete and answers a test prompt. Then you verify it in one transaction that <b>burns {shown} $SCRIBE</b>. The verification badge is permanent on chain.</p>
+          <p className="muted">The bot checks that {s.name} is complete and answers a test prompt. Then you verify it in one transaction that <b>burns {shown} $SCRIBES</b>. The verification badge is permanent on chain.</p>
           {verdict && (
             <>
               <ul className="trail vchecks">{verdict.checks.map((c) => <li key={c.name} className={c.ok ? 'ok' : 'bad'}><span className="tr-a">{c.name.toLowerCase()}</span><span className="tr-b">, {c.detail.toLowerCase()}</span></li>)}</ul>
               {verdict.reply && <p className="vreply"><span>test prompt, {s.name}'s answer:</span> “{verdict.reply.trim().slice(0, 280)}”</p>}
               {verdict.ok ? (
                 <div className="vgo">
-                  {/* one button: it says when the wallet does not hold enough $scribe */}
-                  <button className={`verify-go${balance !== null && !enough ? ' short' : ''}`} disabled={!!busy || !enough} onClick={verify}>{busy || (balance !== null && !enough ? `you need ${shown} $scribe to verify` : `verify, burn ${shown} $scribe`)}</button>
+                  {/* one button: it says when the wallet does not hold enough $scribes */}
+                  <button className={`verify-go${balance !== null && !enough ? ' short' : ''}`} disabled={!!busy || !enough} onClick={verify}>{busy || (balance !== null && !enough ? `you need ${shown} $scribes to verify` : `verify, burn ${shown} $scribes`)}</button>
                 </div>
               ) : null}
             </>

@@ -140,7 +140,7 @@ export function InscribeWindow({ name, purpose, checking, error, report, phase, 
     { a: 'chunk transactions', b: phase?.phase === 'inscribing' ? `${phase.done.toLocaleString()} of ${phase.total.toLocaleString()} written` : done && report?.quote ? `${report.quote.chunks.toLocaleString()} of ${report.quote.chunks.toLocaleString()} written` : 'written', ok: done },
     { a: 'every file', b: 'on solana', ok: done },
   ];
-  if (verify) steps.push({ a: 'checks', b: verdict && !verdict.ok ? 'not passed' : 'every file verified', ok: !!verdict?.ok }, { a: `${amount} $scribe`, b: 'burned', ok: !!burned });
+  if (verify) steps.push({ a: 'checks', b: verdict && !verdict.ok ? 'not passed' : 'every file verified', ok: !!verdict?.ok }, { a: `${amount} $scribes`, b: 'burned', ok: !!burned });
 
   async function sign() {
     setFault('');
@@ -162,7 +162,7 @@ export function InscribeWindow({ name, purpose, checking, error, report, phase, 
   else if (done && verify && !burned) foot = !verdict
     ? <button className="iw-go" disabled>running the checks</button>
     : verdict.ok
-      ? <button className={`iw-go${balance !== null && !enough ? ' short' : ''}`} disabled={!!busy || !enough} onClick={burn}>{busy || (balance !== null && !enough ? `you need ${amount} $scribe to verify` : `verify, burn ${amount} $scribe`)}</button>
+      ? <button className={`iw-go${balance !== null && !enough ? ' short' : ''}`} disabled={!!busy || !enough} onClick={burn}>{busy || (balance !== null && !enough ? `you need ${amount} $scribes to verify` : `verify, burn ${amount} $scribes`)}</button>
       : <a className="iw-go" href="#/me">inscribed, view</a>;
   else if (done) foot = <a className="iw-go" href="#/me">inscribed, view</a>;
 
@@ -190,7 +190,7 @@ export function InscribeWindow({ name, purpose, checking, error, report, phase, 
       {working || checking || (done && verify && !burned && !verdict)
         ? <div className="iw-mid"><span className="loading-cube"><span className="lc">{['f', 'b', 'r', 'l', 't', 'u'].map((k) => <img key={k} className={`lf lf-${k}`} src="/favicon.svg?v=4" alt="" />)}</span></span></div>
         : <div className="iw-mid" />}
-      {report?.ok && !phase && report.quote && <p className="iw-note">{verify ? 'two signatures. this one inscribes it, the second burns $scribe once every file is on solana.' : 'one signature. once born, a scribe exists forever.'}</p>}
+      {report?.ok && !phase && report.quote && <p className="iw-note">{verify ? 'two signatures. this one inscribes it, the second burns $scribes once every file is on solana.' : 'one signature. once born, a scribe exists forever.'}</p>}
       {(fault || error || phase?.phase === 'failed') && <p className="iw-bad">{phase?.phase === 'failed' ? 'inscription paused. it resumes on its own and nothing you paid is lost.' : (fault || error).toLowerCase()}</p>}
       <div className="iw-foot">
         {foot}

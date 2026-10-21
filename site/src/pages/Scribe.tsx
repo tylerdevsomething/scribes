@@ -79,7 +79,7 @@ export function ScribePage({ address, ask }: { address: string; ask?: string }) 
             <h1 className="hero-title pf-name">{s.name ?? 'Inscribing'}{isVerified(s) && (
               <span className="pf-vmark" tabIndex={0} aria-label="verified">
                 <VerifiedMark size={22} />
-                <span className="pf-vpop" role="tooltip">{s.name} passed the bot's checks and its owner burned $SCRIBE to verify it{s.verifiedSlot ? ` at slot ${s.verifiedSlot.toLocaleString()}` : ''}. The badge stays with the scribe forever, whoever holds it.</span>
+                <span className="pf-vpop" role="tooltip">{s.name} passed the bot's checks and its owner burned $SCRIBES to verify it{s.verifiedSlot ? ` at slot ${s.verifiedSlot.toLocaleString()}` : ''}. The badge stays with the scribe forever, whoever holds it.</span>
               </span>
             )}</h1>
             {/* the scribe's key facts as a chain of small data blocks */}

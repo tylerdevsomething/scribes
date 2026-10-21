@@ -65,7 +65,7 @@ instruction, so a birth record can never be removed.
   0.01 SOL on devnet) to whoever owns the Autograph scribe at that moment.
 - **Market.** Owners can list a scribe at a price, cancel, or sell; the market keeps a fee
   (2.5% on devnet). Owners can also give a scribe away.
-- **Verification.** The owner burns $SCRIBE and the verifier checks the scribe; the Verified mark is
+- **Verification.** The owner burns $SCRIBES and the verifier checks the scribe; the Verified mark is
   then kept on chain for good.
 - **Journal.** The owner can inscribe journal entries; the scribe remembers entries written by
   whoever held it at the time.

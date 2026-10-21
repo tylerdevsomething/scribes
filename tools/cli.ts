@@ -254,7 +254,7 @@ async function main() {
     const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
     console.log(`sale fee set to ${bps / 100}% · ${sig}`);
   } else if (cmd === 'test-token') {
-    // A stand-in for $SCRIBE on localnet/devnet: a Token-2022 mint (6 decimals) the admin can mint,
+    // A stand-in for $SCRIBES on localnet/devnet: a Token-2022 mint (6 decimals) the admin can mint,
     // set as the burn mint, so verification can be tested before the real token exists.
     const conn = new Connection(need(a, 'rpc'), 'confirmed');
     if ((await conn.getGenesisHash()) === '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d') throw new Error('not on mainnet');
@@ -302,7 +302,7 @@ async function main() {
     const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [key], { commitment: 'confirmed' });
     console.log(`admin is now ${admin.toBase58()}${a['fee-receiver'] ? `, fees go to ${a['fee-receiver']}` : ''} · ${sig}`);
   } else if (cmd === 'token') {
-    // Sets the token verification burns (e.g. $SCRIBE once it launches) and how many whole tokens it burns;
+    // Sets the token verification burns (e.g. $SCRIBES once it launches) and how many whole tokens it burns;
     // every other setting is kept as it is. With --key (the admin) it is sent; without, the admin is a multisig
     // account (Squads), so the transaction is printed in base58 for its import (Squads: TX Builder, import transaction),
     // or with --propose <member.json> --multisig <pk> put straight into Squads as a proposal for the members to approve.

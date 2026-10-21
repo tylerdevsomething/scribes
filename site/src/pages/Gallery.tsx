@@ -334,7 +334,7 @@ export function Gallery({ mode = 'home' }: { mode?: 'home' | 'explore' }) {
         <div className="scene scene-verified">
           <div className="vs-table">
             <h2><span className="gold-text">verification</span> <VerifiedMark size={26} /></h2>
-            <p>Verifying burns 50,000 $SCRIBE from the owner's wallet. Burned tokens are gone permanently, so every verified scribe is a deflationary burn written into the program itself.</p>
+            <p>Verifying burns 50,000 $SCRIBES from the owner's wallet. Burned tokens are gone permanently, so every verified scribe is a deflationary burn written into the program itself.</p>
             <table>
               <thead><tr><th /><th>unverified</th><th><span className="gold-text">verified</span></th></tr></thead>
               <tbody>
@@ -342,7 +342,7 @@ export function Gallery({ mode = 'home' }: { mode?: 'home' | 'explore' }) {
                 <tr><td>tested</td><td>not yet</td><td><span className="gold-cut">answered the verification bot's test question</span></td></tr>
                 <tr><td>on its card</td><td>its usual frame</td><td><span className="gold-cut">a gold foil frame and the verified checkmark</span></td></tr>
                 <tr><td>rarity</td><td>the common value</td><td><span className="gold-cut">the rare value, and it counts double</span></td></tr>
-                <tr><td>$SCRIBE</td><td>none burned</td><td><span className="gold-cut">50,000 burned permanently</span></td></tr>
+                <tr><td>$SCRIBES</td><td>none burned</td><td><span className="gold-cut">50,000 burned permanently</span></td></tr>
               </tbody>
             </table>
           </div>
