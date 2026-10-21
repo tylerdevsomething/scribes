@@ -24,7 +24,8 @@ async function main() {
   assert.ok(settings.verificationOpen, 'verification must be open (run tools/cli.ts test-token)');
   await post('/faucet', { owner: owner.publicKey.toBase58() }).catch(() => {}); // test tokens
 
-  const verdict = await post(`/verify/${scribe}`);
+  let verdict = await post(`/verify/${scribe}`);
+  while (verdict.pending) { await new Promise((r) => setTimeout(r, 3000)); verdict = await post(`/verify/${scribe}`); } // 202 while the checks run
   for (const c of verdict.checks) console.log(`  ${c.ok ? 'ok ' : 'FAIL'} ${c.name}: ${c.detail}`);
   console.log(`  test prompt answer: ${JSON.stringify((verdict.reply ?? '').slice(0, 100))}`);
   assert.ok(verdict.ok && verdict.pass, 'the scribe should pass');

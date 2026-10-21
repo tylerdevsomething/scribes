@@ -25,12 +25,16 @@ export function tokens(base: string | bigint, s: Settings): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: d });
 }
 
-// the bot's checks on a born scribe; a passing one comes back with the verifier's signed pass
+// the bot's checks on a born scribe; a passing one comes back with the verifier's signed pass. Running an
+// inscribed brain can take minutes, so the server answers 202 while it works and this asks again.
 export async function runChecks(address: string): Promise<Verdict> {
-  const r = await fetch(`${API}/verify/${address}`, { method: 'POST' });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error);
-  return j;
+  for (const end = Date.now() + 15 * 60_000; ;) {
+    const r = await fetch(`${API}/verify/${address}`, { method: 'POST' });
+    const j = await r.json().catch(() => ({ error: `the bot answered ${r.status}` }));
+    if (r.status === 202 && Date.now() < end) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
+    if (!r.ok || r.status === 202) throw new Error(j.error ?? 'the checks are taking too long: try again in a few minutes');
+    return j;
+  }
 }
 
 // the owner's verify transaction: the verifier's pass and the program's verify instruction, which burns the set

@@ -14,7 +14,8 @@
 // GET /bounty/:address  one bounty
 // GET /models           inscribed models anyone can reuse (most used first)
 // GET /settings         chain settings: verifier, burn mint and amount (+ decimals, token program), fees
-// POST /verify/:address the bot's checks; a passing scribe gets a signed pass (needs --verifier)
+// POST /verify/:address the bot's checks; a passing scribe gets a signed pass (needs --verifier); 202 {pending}
+//                        while they still run, ask again
 // POST /faucet {owner}  test SOL and test tokens (only with --faucet, never on mainnet)
 // GET /files/:sha256    a checked file of a valid, complete, not-hidden scribe
 //
@@ -243,7 +244,7 @@ createServer((req, res) => {
   if (parts[0] === 'settings') { settings().then((s) => json(res, 200, s), (e) => json(res, 500, { error: e.message })); return; }
   if (parts[0] === 'verify' && parts.length === 2 && req.method === 'POST') {
     if (!verifier) return json(res, 404, { error: 'the verification bot is not running on this server' });
-    verifier.verify(parts[1]).then((v) => json(res, 200, v), (e) => json(res, 400, { error: e.message }));
+    verifier.check(parts[1], 20_000).then((v) => (v ? json(res, 200, v) : json(res, 202, { pending: true })), (e) => json(res, 400, { error: e.message }));
     return;
   }
   if (parts[0] === 'faucet' && req.method === 'POST') {

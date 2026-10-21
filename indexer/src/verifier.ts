@@ -16,6 +16,9 @@ import type { Indexer } from './indexer.ts';
 import { runtimeFiles } from './runtime.ts';
 
 export const TEST_PROMPT = 'Introduce yourself in one or two sentences.';
+// Threads for an inscribed brain's test. A container sees every core of its host but may only get a few cores'
+// time, and one thread per visible core then crawls (minutes for a 360M model), so it is capped.
+const THREADS = Number(process.env.VERIFY_THREADS) || 4;
 const MIN_REPLY_CHARS = 12;
 
 export interface Check { name: string; ok: boolean; detail: string }
@@ -36,6 +39,7 @@ export class Verifier {
   private official: Promise<Set<string>>;
   private cache = new Map<string, Verdict>(); // by manifest sha: the same files give the same verdict
   private queue: Promise<unknown> = Promise.resolve();
+  private running = new Map<string, Promise<Verdict>>(); // by scribe: a check in progress, or just finished
 
   constructor(opts: { indexer: Indexer; key: Keypair; anthropicKey?: string; xaiKey?: string }) {
     this.indexer = opts.indexer;
@@ -52,6 +56,23 @@ export class Verifier {
     const run = this.queue.then(() => this.run(address));
     this.queue = run.catch(() => {});
     return run;
+  }
+
+  // The verdict if it is ready within waitMs, else null and the check carries on: a request is never held
+  // open past the host's proxy limit. Asking again joins the same check; a finished one is kept a minute.
+  async check(address: string, waitMs: number): Promise<Verdict | null> {
+    let run = this.running.get(address);
+    if (!run) {
+      const t0 = Date.now();
+      run = this.verify(address);
+      this.running.set(address, run);
+      const forget = () => setTimeout(() => { if (this.running.get(address) === run) this.running.delete(address); }, 60_000);
+      run.then((v) => { console.log(`verify ${address}: ${v.ok ? 'passed' : 'failed'} in ${((Date.now() - t0) / 1000).toFixed(1)}s`); forget(); },
+        (e) => { console.log(`verify ${address}: ${(e as Error).message}`); forget(); });
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<null>((r) => { timer = setTimeout(() => r(null), waitMs); });
+    try { return await Promise.race([run, late]); } finally { clearTimeout(timer); }
   }
 
   private async run(address: string): Promise<Verdict> {
@@ -107,7 +128,7 @@ export class Verifier {
   private async runInscribed(modelSha: string, p: Personality): Promise<string> {
     const path = this.indexer.filePath(modelSha);
     if (!existsSync(path)) throw new Error('the model file is not in the cache yet');
-    this.llama ??= getLlama({ gpu: false });
+    this.llama ??= getLlama({ gpu: false, maxThreads: THREADS });
     const llama = await this.llama;
     const model = await llama.loadModel({ modelPath: path });
     try {
