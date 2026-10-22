@@ -235,7 +235,7 @@ createServer((req, res) => {
     res.end(cardPng(indexer, s, total));
     return;
   }
-  if (parts[0] === 'health') return json(res, 200, { syncedAt: indexer.syncedAt, scribes: indexer.list().length });
+  if (parts[0] === 'health') return json(res, 200, { syncedAt: indexer.syncedAt, scribes: indexer.list().length, deployment: process.env.RAILWAY_DEPLOYMENT_ID?.slice(0, 8) ?? null });
   if (parts[0] === 'market') return json(res, 200, { feeBps: indexer.feeBps });
   if (parts[0] === 'models') return json(res, 200, indexer.models());
   if (parts[0] === 'bounties' && parts.length === 1) return json(res, 200, bounties.list());
