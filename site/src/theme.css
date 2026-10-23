@@ -2405,8 +2405,8 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .ib-profile .ib-face { font-size: 11px; }
 @media (prefers-reduced-motion: reduce) { .ib-roll { animation: none; } }
 /* corners match their side: red blocks on the red half, blue blocks on the blue half */
-.scene-explore .card.coming::before, .card.coming .card-rule::after, .pf-pic.coming::before, .pf-pic.coming .card-rule::after { background: var(--green); }
-.scene-explore .card.coming::after, .card.coming .card-rule::before, .pf-pic.coming::after, .pf-pic.coming .card-rule::before { background: var(--purple); }
+.scene-explore .card.coming::before, .scene-trending .card.coming::before, .card.coming .card-rule::after, .pf-pic.coming::before, .pf-pic.coming .card-rule::after { background: var(--green); }
+.scene-explore .card.coming::after, .scene-trending .card.coming::after, .card.coming .card-rule::before, .pf-pic.coming::after, .pf-pic.coming .card-rule::before { background: var(--purple); }
 /* hover: the picture stays still and the card lifts, like a verified card */
 .card.coming:hover .art img { transform: none; }
 .stage .card.coming:hover { transform: translateY(-3px); }

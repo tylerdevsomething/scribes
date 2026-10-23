@@ -229,7 +229,7 @@ export function Gallery({ mode = 'home' }: { mode?: 'home' | 'explore' }) {
     const seen: string[] = [];
     for (const a of activity ?? []) if (!seen.includes(a.scribe)) seen.push(a.scribe);
     const at = (s: ScribeView) => { const i = seen.indexOf(s.address); return i < 0 ? 1e6 - s.birthNumber : i; };
-    return visible.filter((s) => s.status.state === 'complete').sort((a, b) => at(a) - at(b)).slice(0, 5);
+    return visible.filter((s) => s.status.state === 'complete').sort((a, b) => at(a) - at(b)).slice(0, 4); // the coming card makes five
   }, [visible, activity]);
   const bytes = models.reduce((n, m) => n + m.size, 0);
   const txs = models.reduce((n, m) => n + chunkCount(m.size), 0);
@@ -346,9 +346,9 @@ export function Gallery({ mode = 'home' }: { mode?: 'home' | 'explore' }) {
 
         <div className="scene scene-scribes scene-trending">
           <div className="toolbar"><h2>trending scribes</h2><a className="more" href="#/explore" aria-label="Explore all scribes" title="explore all scribes"><i className="more-key" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M3 9l6-6M4 3h5v5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square" /></svg></i></a></div>
-          <p className="trend-lede">The five scribes with the most recent activity on chain.</p>
+          <p className="trend-lede">The scribes with the most recent activity on chain.</p>
           {error && <div className="notice bad" style={{ marginBottom: 16 }}>Could not reach the indexer: {error}</div>}
-          <div className="grid">{trending.map((s) => <ScribeCard key={s.address} s={s} knight />)}</div>
+          <div className="grid"><ComingCard />{trending.map((s) => <ScribeCard key={s.address} s={s} knight />)}</div>
         </div>
 
         <div className="scene scene-rarity">
