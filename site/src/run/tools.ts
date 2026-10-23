@@ -64,7 +64,16 @@ export function toolDefinitions(enabled: string[]): Anthropic.Beta.BetaToolUnion
   if (on('propose_message')) d.push(client('propose_message', 'Draft a public message written to Solana forever (a memo), signed by the person you are talking to if they approve.', obj({ text: str('The message, up to 400 characters') }, ['text'])));
   if (on('propose_scribe_trade')) d.push(client('propose_scribe_trade', 'Draft a scribe trade for the person you are talking to: buy a listed scribe, list one they own, or tip a scribe\'s owner in SOL. Nothing happens until they approve.', obj({ action: { type: 'string', enum: ['buy', 'list', 'tip'] }, scribe: str('Name, #number or address'), amount_sol: num('Listing price or tip in SOL (ignored for buy: the listed price is used)') }, ['action', 'scribe', 'amount_sol'])));
   for (const n of enabled) if (MARKET_TOOLS[n]) d.push(MARKET_TOOLS[n]);
-  return d;
+  // Claude takes at most 20 strict tools in one request; past that the lookups lose strict first, so the
+  // tools that draft transactions keep their exact schemas.
+  const isStrict = (t: Anthropic.Beta.BetaToolUnion) => !!(t as { strict?: boolean }).strict;
+  let over = d.filter(isStrict).length - 20;
+  return d.map((t) => {
+    if (over <= 0 || !isStrict(t) || /^(propose_|answer_bounty$|journal$)/.test((t as { name: string }).name)) return t;
+    over--;
+    const { strict: _, ...loose } = t as { strict?: boolean };
+    return loose as Anthropic.Beta.BetaToolUnion;
+  });
 }
 
 // ---- helpers ----
