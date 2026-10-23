@@ -882,7 +882,7 @@ body, input, textarea, button { font-variant-numeric: normal; font-feature-setti
 .way .picked, .model-row .picked { position: absolute; top: 8px; right: 8px; color: #fff; }
 .way .picked path, .model-row .picked path { stroke: var(--purple); }
 .sec-head { display: flex; align-items: center; gap: 10px; margin: 6px 0 14px; padding-bottom: 8px; border-bottom: 3px solid var(--purple); font: 300 22px/1 var(--gothic); color: var(--ink); }
-.sec-head i { display: grid; place-items: center; width: 24px; height: 24px; background: var(--purple); color: #fff; font: 600 12px/1 var(--mono); font-style: normal; }
+.sec-head i { display: grid; place-items: center; width: 16px; height: 16px; background: var(--purple); color: #fff; font: 600 12px/1 var(--mono); font-style: normal; }
 .scene-create .form .field > span em { display: none; }
 .model-row { margin-bottom: 26px; }
 .model-row button { position: relative; min-width: 140px; padding: 12px 34px 12px 14px; }
@@ -1216,7 +1216,7 @@ body, input, textarea, button { font-variant-numeric: normal; font-feature-setti
 .solscan { border-color: var(--purple); color: var(--purple); }
 .solscan:hover { background: var(--purple); color: var(--paper); }
 .model-go .show-all.on { background: var(--green); }
-.model-go .show-all.on:hover { background: var(--green-ink); }
+.model-go .show-all.on:hover { }
 
 /* the brief: title and paragraph like models, three framed steps, then the brief itself */
 .brief-steps { width: calc(5 * 160px + 4 * 24px); max-width: 100%; margin: 0 auto 44px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
@@ -1303,7 +1303,7 @@ body, input, textarea, button { font-variant-numeric: normal; font-feature-setti
 .wallet-box > .c2 { position: absolute; inset: -3px; pointer-events: none; }
 .wallet-box > .c2::before { top: 0; right: 0; } .wallet-box > .c2::after { bottom: 0; left: 0; }
 .wallet-box h2 { margin: 0 0 18px; font: 300 26px/1.1 var(--gothic); color: var(--ink); text-align: center; }
-.wallet-close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; background: var(--purple); color: var(--paper); box-shadow: none; cursor: pointer; }
+.wallet-close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 16px; height: 16px; padding: 0; border: 0; background: var(--purple); color: var(--paper); box-shadow: none; cursor: pointer; }
 .wallet-close:hover { background: var(--green); color: var(--paper); }
 .wallet-list { display: flex; flex-direction: column; gap: 10px; }
 .wallet-list button, .wallet-list a { display: flex; align-items: center; justify-content: center; gap: 10px; height: 46px; padding: 0 14px; border: 2px solid var(--purple); background: var(--paper); box-shadow: none; color: var(--purple); font: 600 var(--body)/1 var(--mono); letter-spacing: .04em; text-decoration: none; text-transform: lowercase; cursor: pointer; }
@@ -1772,7 +1772,7 @@ body, input, textarea, button { font-variant-numeric: normal; font-feature-setti
 .pf-feed .wake-panel .row button.link:hover { border-color: var(--purple); color: var(--purple); }
 /* the verified note: the same small pop-up as the info marks, only gold */
 .pf-vpop { width: 220px; padding: 8px 10px; left: 30px; top: -4px; transform: none; font: 500 10.5px/1.5 var(--mono); border: 2px solid #c99a33; outline: 0; }
-.solscan-tag { background: var(--green); } .solscan-tag:hover { background: var(--green-ink); } /* red on the file rows, her call */
+.solscan-tag { background: var(--green); } .solscan-tag:hover { } /* red on the file rows, her call */
 .pf-feed .panel-head .info { margin-left: auto; } .pf-feed .info-pop { text-transform: lowercase; }
 .pf-feed .info button { width: 15px; height: 15px; padding: 0; border: 1.5px solid var(--purple); background: var(--paper); color: var(--purple); box-shadow: none; font: 600 10px/1 var(--mono); }
 
@@ -2106,7 +2106,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .mk-row { position: absolute; left: -3px; right: -3px; top: calc(100% + 8px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .mk-row .mk-bar { position: static; height: 34px; padding: 0 4px; white-space: nowrap; text-align: center; font-size: 10px; letter-spacing: 0; }
 .mk-bar.on { background: var(--green); }
-.card:hover .mk-bar.on { background: var(--green-ink); }
+.card:hover .mk-bar.on { }
 .mk-bar.on.gold, .card:hover .mk-bar.on.gold { background: #c99a33; }
 .mk-view { height: 34px; display: grid; place-items: center; background: var(--ink); color: var(--paper); font: 600 10.5px/1 var(--mono); letter-spacing: .04em; text-transform: lowercase; }
 .card:hover .mk-view { background: var(--purple); }
@@ -2377,3 +2377,36 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .iw.gold .iw-go:hover:not(:disabled) { filter: brightness(1.08); }
 .iw.gold .iw-tx { color: #a87a1c; }
 @media (max-width: 700px) { .iw { padding: 36px 22px 24px; } .iw-top { gap: 16px; } .iw-pic { width: 110px; height: 110px; } .iw h2 { font-size: 30px; } }
+
+/* the scribe on its way at the top of browse: a red and blue frame with the verified card's travelling shine */
+.stage .card.coming { border-color: transparent; background: linear-gradient(var(--paper), var(--paper)) padding-box, linear-gradient(90deg, transparent 42%, rgba(255, 255, 255, .9) 50%, transparent 58%) border-box, linear-gradient(90deg, var(--green) 50%, var(--purple) 50%) border-box;
+  background-size: auto, 300% 100%, auto; background-repeat: no-repeat; animation: glint-x 3.6s linear infinite; }
+.pf-bar .pf-pic.portrait.coming { border-color: transparent; background: linear-gradient(var(--paper), var(--paper)) padding-box, linear-gradient(90deg, transparent 42%, rgba(255, 255, 255, .9) 50%, transparent 58%) border-box, linear-gradient(90deg, var(--green) 50%, var(--purple) 50%) border-box;
+  background-size: auto, 300% 100%, auto; background-repeat: no-repeat; animation: glint-x 3.6s linear infinite; }
+.pf-pic.coming img, .pf-banner.coming img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-banner.coming { background: var(--paper); }
+@media (prefers-reduced-motion: reduce) { .stage .card.coming, .pf-bar .pf-pic.portrait.coming { animation: none; } }
+.mk-bar.on.coming-bar, .card:hover .mk-bar.on.coming-bar { background: linear-gradient(90deg, transparent 42%, rgba(255, 255, 255, .55) 50%, transparent 58%), linear-gradient(var(--green), var(--green));
+  background-size: 300% 100%, auto; background-repeat: no-repeat; animation: bar-glint 3.6s linear infinite; }
+@keyframes bar-glint { from { background-position: 150% 0, 0 0; } to { background-position: -50% 0, 0 0; } }
+@media (prefers-reduced-motion: reduce) { .mk-bar.on.coming-bar { animation: none; } }
+.coming-pin { position: absolute; top: 10px; right: 10px; z-index: 3; display: grid; place-items: center; width: 16px; height: 16px; background: var(--green); color: var(--paper); font: 600 10px/1 var(--mono); letter-spacing: .04em; text-transform: lowercase; }
+.pf-coming-bar { position: static; display: inline-grid; place-items: center; height: 38px; padding: 0 30px; font-size: 11px; }
+/* the inscribing bar: a red bar rolling over on its long axis, like the loader block turning */
+.ib { --h: 34px; position: relative; display: block; height: var(--h); perspective: 300px; }
+.ib-roll { position: absolute; inset: 0; transform-style: preserve-3d; animation: ib-roll 3.2s cubic-bezier(.6, 0, .4, 1) infinite; }
+.ib-face { position: absolute; inset: 0; display: grid; place-items: center; background: var(--green); color: var(--paper); font: 600 10px/1 var(--mono); letter-spacing: .04em; text-transform: lowercase; backface-visibility: hidden; }
+.ib-f { transform: translateZ(calc(var(--h) / 2)); }
+.ib-t { transform: rotateX(90deg) translateZ(calc(var(--h) / 2)); }
+.ib-b { transform: rotateX(180deg) translateZ(calc(var(--h) / 2)); }
+.ib-u { transform: rotateX(-90deg) translateZ(calc(var(--h) / 2)); }
+@keyframes ib-roll { 0%, 15% { transform: rotateX(0); } 25%, 40% { transform: rotateX(-90deg); } 50%, 65% { transform: rotateX(-180deg); } 75%, 90% { transform: rotateX(-270deg); } 100% { transform: rotateX(-360deg); } }
+.ib-profile { --h: 38px; width: 170px; }
+.ib-profile .ib-face { font-size: 11px; }
+@media (prefers-reduced-motion: reduce) { .ib-roll { animation: none; } }
+/* corners match their side: red blocks on the red half, blue blocks on the blue half */
+.scene-explore .card.coming::before, .card.coming .card-rule::after, .pf-pic.coming::before, .pf-pic.coming .card-rule::after { background: var(--green); }
+.scene-explore .card.coming::after, .card.coming .card-rule::before, .pf-pic.coming::after, .pf-pic.coming .card-rule::before { background: var(--purple); }
+/* hover: the picture stays still and the card lifts, like a verified card */
+.card.coming:hover .art img { transform: none; }
+.stage .card.coming:hover { transform: translateY(-3px); }

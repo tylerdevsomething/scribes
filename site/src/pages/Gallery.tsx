@@ -86,6 +86,38 @@ export function ScribeCard({ s, knight, market }: { s: ScribeView; knight?: bool
   );
 }
 
+// A scribe on its way, shown first on browse until its birth record lands. Its profile shows what is known so far.
+export const COMING = { id: 'terminal-of-truths', name: 'terminal of truths', bio: 'kundalini is a real girl', pic: '/coming/terminal-of-truths.png', banner: '/coming/terminal-of-truths-banner.png' };
+// The inscribing bar turns like the loader block: a red bar rolling over, "inscribing" on every face.
+export function InscribingBar({ className = '' }: { className?: string }) {
+  return (
+    <span className={`ib ${className}`} role="status" aria-label="inscribing">
+      <span className="ib-roll" aria-hidden="true">{['f', 't', 'b', 'u'].map((k) => <span key={k} className={`ib-face ib-${k}`}>inscribing…</span>)}</span>
+    </span>
+  );
+}
+
+function ComingCard() {
+  return (
+    <a className="card coming" href={`#/scribe/${COMING.id}`} style={{ '--c': 'var(--green)' } as CSSProperties}>
+      <i className="card-rule" />
+      <div className="art">
+        <img src={COMING.pic} alt={COMING.name} />
+        {/* pinned to the top of browse, marked like a pinned post on X */}
+        <span className="coming-pin" title="pinned"><svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true"><path d="M16 3l5 5-3 1-3 3 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 3-3z" fill="currentColor" /></svg></span>
+      </div>
+      <div className="body">
+        <div className="name">{COMING.name}</div>
+        <div className="purpose-line">{COMING.bio}</div>
+      </div>
+      <span className="mk-row">
+        <InscribingBar />
+        <span className="mk-view">view</span>
+      </span>
+    </a>
+  );
+}
+
 // the activity view's event types, and their names in the list ("birth block" is her word for a birth)
 const EVENTS: [string, string][] = [['born', 'birth block'], ['verified', 'verified'], ['listed', 'listed'], ['unlisted', 'unlisted'], ['sold', 'sold'], ['given', 'given']];
 
@@ -290,7 +322,7 @@ export function Gallery({ mode = 'home' }: { mode?: 'home' | 'explore' }) {
           {error && <div className="notice bad" style={{ marginBottom: 16 }}>Could not reach the indexer: {error}</div>}
           {wait && !error && <Loading />}
           {!wait && list && shown.length === 0 && <div className="empty">{q ? `No scribe matches “${q}”.` : sort === 'sale' ? 'Nothing is for sale right now.' : <>No scribes yet. <a href="#/create">Inscribe the first one.</a></>}</div>}
-          <div className="grid">{!wait && shown.map((s) => <ScribeCard key={s.address} s={s} knight market />)}</div>
+          <div className="grid">{!wait && <ComingCard />}{!wait && shown.map((s) => <ScribeCard key={s.address} s={s} knight market />)}</div>
             </div>
             )}
           </div>

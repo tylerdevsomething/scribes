@@ -1,7 +1,7 @@
 import { Component, useEffect, useState, type ReactNode } from 'react';
 import './home.css';
 import { Gallery } from './pages/Gallery.tsx';
-import { ScribePage } from './pages/Scribe.tsx';
+import { ComingProfile, ScribePage } from './pages/Scribe.tsx';
 import { Create } from './pages/Create.tsx';
 import { BriefPage } from './pages/Brief.tsx';
 import { Me } from './pages/Me.tsx';
@@ -38,7 +38,8 @@ export function App() {
   const parts = route.split('/').filter(Boolean);
   const ask = new URLSearchParams(query).get('ask') ?? undefined; // a question to put to the scribe on arrival
   let page;
-  if (parts[0] === 'scribe' && parts[1]) page = <ScribePage key={parts[1]} address={parts[1]} ask={ask} />; // fresh state (and brain) per scribe
+  if (parts[0] === 'scribe' && parts[1] === 'terminal-of-truths') page = <ComingProfile />;
+  else if (parts[0] === 'scribe' && parts[1]) page = <ScribePage key={parts[1]} address={parts[1]} ask={ask} />; // fresh state (and brain) per scribe
   else if (parts[0] === 'create') page = <Create key={parts[2] ?? ''} model={parts[1] === 'model' ? parts[2] : undefined} />;
   else if (parts[0] === 'models') page = <ModelsPage />;
   else if (parts[0] === 'brief') page = <BriefPage />;

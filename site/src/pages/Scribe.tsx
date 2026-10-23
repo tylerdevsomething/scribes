@@ -8,7 +8,7 @@ import { parsePersonality, systemPrompt, type Personality } from '../../../lib/s
 import { ATTRIBUTES, type Attribute } from '../../../lib/src/rarity.ts';
 import { fileUrl, getScribe, type ScribeView } from '../api.ts';
 import { CLUSTER, conn, explorer, modelName, short } from '../config.ts';
-import { Capsule, Portrait, brainLine, isVerified, questions } from './Gallery.tsx';
+import { COMING, InscribingBar, Capsule, Portrait, brainLine, isVerified, questions } from './Gallery.tsx';
 import { birthDay, sealColour } from '../Sigil.tsx';
 import { Folio } from '../Hero.tsx';
 import { VerifiedMark } from '../Figure.tsx';
@@ -38,6 +38,64 @@ const keyLabel = (s: ScribeView) => { const p = providerOf(s); return `${isProvi
 const hold = () => new Promise((r) => setTimeout(r, 900));
 // Where each attribute comes from (the brief's colour code).
 const FROM_CHAIN: Attribute[] = ['Birth', 'Autograph', 'Verified'];
+
+// The profile of a scribe on its way: its banner, picture, name and bio, with every on-chain field still empty.
+// what is already settled for it: a hybrid scribe on Claude, born among the first hundred
+const KNOWN: Partial<Record<string, string>> = { Brain: 'Bound', Weight: 'n/a (bound)', Birth: 'Genesis #1 to 100', Autograph: 'No', Verified: 'No' };
+export function ComingProfile() {
+  return (
+    <Folio className="folio-hero stage">
+      <div className="scene scene-profile">
+        <a className="pf-back" href="#/explore"><svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M8 2L4 6l4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" /></svg>back to browse</a>
+        <header className="pf-head">
+          <div className="pf-banner coming" style={{ '--c': 'var(--green)' } as CSSProperties}><img src={COMING.banner} alt="" /></div>
+          <div className="pf-bar">
+            <div className="portrait pf-pic coming" style={{ '--c': 'var(--green)' } as CSSProperties}><img src={COMING.pic} alt={COMING.name} /><i className="card-rule" /></div>
+          </div>
+          <div className="pf-namerow">
+            <h1 className="hero-title pf-name">{COMING.name}</h1>
+            <div className="stat-chain pf-chain">
+              <div className="stat"><i className="c2" /><b>…</b><span>born</span></div>
+              <i className="stat-link" />
+              <div className="stat"><i className="c2" /><b>…</b><span>owner</span></div>
+              <i className="stat-link" />
+              <div className="stat"><i className="c2" /><b>…</b><span>rarity rank</span></div>
+            </div>
+          </div>
+          <p className="pf-bio">{COMING.bio}</p>
+          <div className="pf-counts">
+            <span><b>…</b> model</span>
+            <span><b>…</b> files</span>
+            <span><b>…</b> transactions</span>
+            <span><b>…</b> memories</span>
+          </div>
+          <div className="pf-actions"><InscribingBar className="ib-profile" /></div>
+        </header>
+        <div className="pf-feed">
+          <div className="pf-grid">
+            <div className="panel">
+              <div className="panel-head"><h3>rarity</h3></div>
+              <table className="attrs"><tbody>{ATTRIBUTES.map((a) => <tr key={a}><td>{a}</td><td>{KNOWN[a] ?? '…'}</td><td>…</td></tr>)}</tbody></table>
+            </div>
+            <div className="pf-capsule">
+              <div className="panel"><div className="panel-head"><h3>Capsule</h3></div><p className="pf-note">…</p></div>
+            </div>
+          </div>
+          <div className="pf-row2">
+            <div className="panel filelist">
+              <div className="panel-head"><h3>inscribed files</h3></div>
+              <table className="pf-table"><thead><tr><th>file</th><th>role</th><th>size</th><th>transactions</th><th>sha256</th><th></th></tr></thead><tbody>{[['personality.json', 'personality'], ['truth_terminal.jpg', 'picture'], ['wiki.library', 'library'], ['backrooms.library', 'library'], ['manifest.json', 'manifest']].map(([f, r]) => <tr key={f + r}><td className="case">{f}</td><td>{r}</td><td>…</td><td>…</td><td>…</td><td /></tr>)}</tbody></table>
+            </div>
+          </div>
+          <div className="panel pf-activity">
+            <div className="panel-head"><h3>activity</h3></div>
+            <table className="pf-table pf-acts"><thead><tr><th>event</th><th>details</th><th>price</th><th>from</th><th>to</th><th>slot</th><th>date</th><th>transaction</th></tr></thead><tbody>{[0, 1, 2].map((n) => <tr key={n}><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>)}</tbody></table>
+          </div>
+        </div>
+      </div>
+    </Folio>
+  );
+}
 
 export function ScribePage({ address, ask }: { address: string; ask?: string }) {
   const [s, setS] = useState<ScribeView | null>(null);
