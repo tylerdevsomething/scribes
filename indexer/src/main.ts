@@ -18,10 +18,16 @@
 //                        while they still run, ask again
 // POST /faucet {owner}  test SOL and test tokens (only with --faucet, never on mainnet)
 // GET /files/:sha256    a checked file of a valid, complete, not-hidden scribe
+// GET /library/:scribe  its libraries: name, title, source, entries, and state (ready, or building while the
+//                        search index is first built). An entry is "<library name>:<path>".
+// GET /library/:scribe/list?lib=&offset=&limit=&under=  a page of one library's entries
+// GET /library/:scribe/search?q=&limit=   full-text search across them: {hits: [path, title, snippet, library], building}
+// GET /library/:scribe/read?path=&offset= a text entry, 30,000 characters at a time (202 while building)
+// GET /library/:scribe/raw?path=          an entry's bytes (pictures)
 //
 // Create flow (needs --writer, the server's writer key):
 // POST /uploads                         → { id }
-// PUT  /uploads/:id/:part/:name         raw body; part = personality | model | model-ref (a sha256) | brain | picture
+// PUT  /uploads/:id/:part/:name         raw body; part = personality | model | model-ref (a sha256) | brain | picture | library
 // POST /uploads/:id/check               → the bot's report, attributes and quote
 // POST /uploads/:id/checkout {owner}    → the one transaction for the owner to sign (writer already signed)
 // POST /uploads/:id/submitted {signature}
@@ -47,6 +53,7 @@ import { HostedBrain } from './brain.ts';
 import { Faucet } from './faucet.ts';
 import { RpcProxy } from './rpc.ts';
 import { cardPng, sharePage } from './card.ts';
+import { Libraries } from './library.ts';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { getMint } from '@solana/spl-token';
 import { readSettings, scribesProgram } from '../../lib/src/registry.ts';
@@ -95,6 +102,15 @@ setInterval(() => uploads?.sweep(), 3600 * 1000);
 const verifier = process.argv.includes('--verifier')
   ? new Verifier({ indexer, key: loadKey(arg('verifier')), anthropicKey: process.env.ANTHROPIC_API_KEY, xaiKey })
   : null;
+const libraries = new Libraries(join(cache, 'libraries'));
+// A scribe's library files, once the scribe is valid, complete and shown, and the files are on disk. Each
+// is named by its file name without ".library"; an entry is "<name>:<path>".
+function librariesOf(address: string): { name: string; sha: string; file: string }[] {
+  const s = indexer.get(address);
+  if (!s || s.hidden || s.status.state !== 'complete') return [];
+  return s.files.filter((f) => f.role === 'library' && indexer.servable(f.sha256) && existsSync(indexer.filePath(f.sha256)))
+    .map((f) => ({ name: f.name.replace(/\.library$/, ''), sha: f.sha256, file: indexer.filePath(f.sha256) }));
+}
 const faucet = process.argv.includes('--faucet') ? new Faucet(conn, loadKey(arg('faucet'))) : null;
 
 async function settings() {
@@ -137,6 +153,7 @@ async function loop() {
     try {
       loadHidden();
       await indexer.sync();
+      for (const s of indexer.list()) for (const l of librariesOf(s.address)) libraries.ensure(l.sha, l.file); // index new libraries ahead of the first visitor
       await activity.sync();
       bounties.fromEvents(activity.bountyEvents() as Parameters<Bounties['fromEvents']>[0]);
       await bounties.sync();
@@ -205,7 +222,7 @@ function serveSite(res: import('node:http').ServerResponse, pathname: string) {
 createServer((req, res) => {
   let url = new URL(req.url ?? '/', 'http://x');
   if (url.pathname.startsWith('/api/')) url = new URL(url.pathname.slice(4) + url.search, 'http://x');
-  else if (siteDir && req.method === 'GET' && !/^\/(health|rpc|brain|mainnet|market|models|bounties|bounty|settings|activity|scribes|scribe|files|uploads|verify|faucet|card|s)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
+  else if (siteDir && req.method === 'GET' && !/^\/(health|rpc|brain|mainnet|market|models|bounties|bounty|settings|activity|scribes|scribe|files|library|uploads|verify|faucet|card|s)(\/|$)/.test(url.pathname)) { serveSite(res, url.pathname); return; }
   const parts = url.pathname.split('/').filter(Boolean);
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (parts[0] === 'uploads') { uploadRoute(req, res, parts); return; }
@@ -256,6 +273,40 @@ createServer((req, res) => {
   if (parts[0] === 'scribe' && parts.length === 2) {
     const s = indexer.get(parts[1]);
     return s ? json(res, 200, s) : json(res, 404, { error: 'no such scribe' });
+  }
+  if (parts[0] === 'library' && parts.length >= 2 && req.method === 'GET') {
+    const libs = librariesOf(parts[1]).map((l) => ({ ...l, st: libraries.ensure(l.sha, l.file) }));
+    if (!libs.length) return json(res, 404, { error: 'this scribe has no library' });
+    const ready = libs.filter((l) => l.st.state === 'ready');
+    const q = url.searchParams, n = (k: string, d: number, max: number) => Math.max(0, Math.min(max, Number(q.get(k) ?? d) || 0));
+    if (parts.length === 2) {
+      return json(res, 200, { libraries: libs.map((l) => ({ name: l.name, sha256: l.sha, ...l.st, ...(l.st.state === 'ready' ? libraries.info(l.sha) : {}) })) });
+    }
+    if (parts[2] === 'search') {
+      // every ready library, best matches first across them
+      const limit = n('limit', 10, 50) || 10;
+      const hits = ready.flatMap((l) => libraries.search(l.sha, String(q.get('q') ?? ''), limit).map((h) => ({ ...h, path: `${l.name}:${h.path}`, library: l.name })))
+        .sort((a, b) => a.rank - b.rank).slice(0, limit).map(({ rank: _, ...h }) => h);
+      return json(res, 200, { hits, building: libs.length - ready.length });
+    }
+    // the rest name one library: ?lib= for its list, or the "<name>:" in front of an entry's path
+    const ref = String(q.get('path') ?? ''), at = ref.indexOf(':');
+    const l = libs.find((x) => x.name === (parts[2] === 'list' ? q.get('lib') : ref.slice(0, at)));
+    if (!l) return json(res, 404, { error: 'no such library' });
+    if (l.st.state === 'failed') return json(res, 500, { error: `the library could not be read: ${l.st.error}` });
+    if (l.st.state === 'building') return json(res, 202, { building: true, done: l.st.done, total: l.st.total });
+    const path = ref.slice(at + 1);
+    if (parts[2] === 'list') return json(res, 200, libraries.list(l.sha, n('offset', 0, 1e7), n('limit', 100, 500), q.get('under') ?? '').map((e) => ({ ...e, path: `${l.name}:${e.path}` })));
+    if (parts[2] === 'read') { const r = libraries.read(l.sha, path, n('offset', 0, 1e9)); return r ? json(res, 200, { ...r, path: ref }) : json(res, 404, { error: 'no such entry' }); }
+    if (parts[2] === 'raw') {
+      const r = libraries.raw(l.sha, path);
+      if (!r) return json(res, 404, { error: 'no such entry' });
+      // served as text or a picture only: never as html, so an entry can't run script on the site
+      res.writeHead(200, { 'content-type': r.type.startsWith('text/') ? 'text/plain; charset=utf-8' : r.type, 'content-length': r.bytes.length, 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff', ...CORS });
+      res.end(r.bytes);
+      return;
+    }
+    return json(res, 404, { error: 'not found' });
   }
   if (parts[0] === 'files' && parts.length === 2 && /^[0-9a-f]{64}$/.test(parts[1])) {
     const path = indexer.filePath(parts[1]);

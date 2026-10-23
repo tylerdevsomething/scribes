@@ -12,7 +12,7 @@ import { journalInstruction } from '../../../lib/src/journal.ts';
 import { answerInstruction } from '../../../lib/src/bounty.ts';
 import { parsePersonality, systemPrompt } from '../../../lib/src/personality.ts';
 import { buyInstruction, listInstruction, scribesProgram } from '../../../lib/src/registry.ts';
-import { fileUrl, getScribe, getScribes, type ScribeView } from '../api.ts';
+import { fileUrl, getScribe, getScribes, readLibrary, searchLibrary, type ScribeView } from '../api.ts';
 import { MARKET_TOOLS, runMarketTool } from './market.ts';
 import { hostedCall } from './bound.ts';
 import { hostedGrokCall } from './grok.ts';
@@ -58,6 +58,10 @@ export function toolDefinitions(enabled: string[]): Anthropic.Beta.BetaToolUnion
   if (on('scribe_market')) d.push(client('scribe_market', 'The scribe market now: how many exist, floor price, cheapest listings, recent sales.', obj({}, [])));
   if (on('bounty_board')) d.push(client('bounty_board', 'Open bounties: questions people will pay SOL for, with the reward, time left and how many answers so far.', obj({}, [])));
   if (on('answer_bounty')) d.push(client('answer_bounty', 'Propose your answer to an open bounty (by its address from bounty_board). If your owner approves, the answer is inscribed; if the poster picks it, your owner is paid.', obj({ bounty: str('Bounty address'), answer: str('Your answer, up to about 800 characters') }, ['bounty', 'answer'])));
+  if (on('library')) {
+    d.push(client('library_search', 'Search your library: the archives inscribed on Solana with you. Every word must appear (or put a phrase in double quotes); returns matching entries with a snippet. Search before answering anything your library may cover, and quote it rather than guessing.', obj({ query: str('Words or a "quoted phrase" to look for') }, ['query'])));
+    d.push(client('library_read', 'Read one entry of your library by its path (from library_search). Long entries come in parts: read from offset 0, then pass the next offset to continue.', obj({ path: str('The entry\'s path'), offset: num('Where to start reading, 0 for the beginning') }, ['path', 'offset'])));
+  }
   if (on('journal')) d.push(client('journal', 'Propose writing a memory into your own journal. If your owner approves, it is inscribed on Solana and you will remember it in every future conversation. Write it in first person, one or two sentences, only things worth keeping.', obj({ entry: str('The memory, in your own words') }, ['entry'])));
   if (on('propose_transfer')) d.push(client('propose_transfer', 'Draft a SOL transfer from the person you are talking to. Nothing is sent: they see it and may approve it in their own wallet. Only propose what they asked for.', obj({ to: str('Recipient wallet address'), amount_sol: num('Amount of SOL'), note: str('Why, in a few words') }, ['to', 'amount_sol', 'note'])));
   if (on('propose_token_transfer')) d.push(client('propose_token_transfer', 'Draft a token transfer from the person you are talking to. Nothing is sent until they approve in their wallet.', obj({ mint: str('Token mint address'), to: str('Recipient wallet address'), amount: num('Amount in whole tokens'), note: str('Why, in a few words') }, ['mint', 'to', 'amount', 'note'])));
@@ -121,6 +125,20 @@ export async function runTool(name: string, input: unknown, ctx: ToolContext): P
 
     case 'scribe_lookup':
       return describeScribe(await findScribe(String(o.query ?? '')));
+
+    case 'library_search': {
+      const { hits, building } = await searchLibrary(ctx.scribe.address, String(o.query ?? ''), 8);
+      const note = building ? `\n(${building} of your libraries is still being indexed and was not searched; try again in a minute.)` : '';
+      if (!hits.length) return `Nothing in your library matches that. Try other words.${note}`;
+      return hits.map((h) => `${h.path} — ${h.title}\n  ${h.snippet.replace(/\s+/g, ' ')}`).join('\n') + note;
+    }
+
+    case 'library_read': {
+      const r = await readLibrary(ctx.scribe.address, String(o.path ?? ''), Math.max(0, Math.floor(Number(o.offset) || 0)));
+      if ('building' in r) return `Your library is still being indexed (${r.done} of ${r.total} entries). Try again in a minute.`;
+      if (r.text === null) return `${r.path} is a picture (${r.type}, ${r.size} bytes); it can be seen on your page, not read as text.`;
+      return `${r.title} (${r.path})\n\n${r.text}${r.next !== null ? `\n\n[continues: read again with offset ${r.next}]` : '\n\n[end]'}`;
+    }
 
     case 'scribe_market': {
       const all = (await getScribes()).filter((s) => !s.hidden && s.status.state !== 'invalid');

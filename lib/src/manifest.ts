@@ -3,8 +3,9 @@
 import { utf8, decodeUtf8 } from './bytes.ts';
 
 export const MANIFEST_FORMAT = 'scribes:v1:manifest';
-export const ROLES = ['personality', 'model', 'runtime', 'picture'] as const;
+export const ROLES = ['personality', 'model', 'runtime', 'picture', 'library'] as const; // library: lib/src/library.ts
 export type Role = (typeof ROLES)[number];
+export const MAX_LIBRARIES = 8;
 
 export interface FileRef {
   role: Role;
@@ -66,6 +67,7 @@ export function checkManifest(m: unknown): Manifest {
   }
   if (files.filter((f) => f.role === 'personality').length !== 1) throw new Error('manifest needs exactly one personality');
   if (files.filter((f) => f.role === 'picture').length > 1) throw new Error('manifest has more than one picture');
+  if (files.filter((f) => f.role === 'library').length > MAX_LIBRARIES) throw new Error(`manifest has more than ${MAX_LIBRARIES} libraries`);
   let brain: Brain;
   const b = x.brain;
   if (b?.kind === 'inscribed') {

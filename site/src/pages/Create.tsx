@@ -13,7 +13,7 @@ import { PROVIDERS, type Provider } from '../../../lib/src/hybrid.ts';
 import { PAGE_TOOLS, PAGE_TOOLS_MIN_PARAMS } from '../../../lib/src/tools.ts';
 
 type Part = 'personality' | 'model' | 'model-ref' | 'brain' | 'picture';
-type Parts = Partial<Record<Part, File>>;
+type Parts = Partial<Record<Part, File>> & { libraries?: File[] }; // libraries: a hybrid scribe's .library files
 
 const size = (n: number) => (n < 1e6 ? `${(n / 1e3).toFixed(1)} KB` : `${(n / 1e6).toFixed(1)} MB`);
 
@@ -92,7 +92,8 @@ export function Create({ model }: { model?: string } = {}) {
     setBusy('Uploading');
     try {
       const { id } = await newUpload();
-      for (const [part, f] of Object.entries(p) as [Part, File][]) {
+      const named: [string, File][] = [...(Object.entries(p).filter(([k]) => k !== 'libraries') as [Part, File][]), ...(p.libraries ?? []).map((f): [string, File] => ['library', f])];
+      for (const [part, f] of named) {
         setBusy(`Uploading ${f.name}`);
         await putPart(id, part, f.name.replace(/[^A-Za-z0-9._-]/g, '_'), f);
       }
@@ -187,6 +188,7 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
   const [hosted, setHosted] = useState(PROVIDERS.anthropic.models[0].id);
   const [own, setOwn] = useState<File | null>(null);
   const [picture, setPicture] = useState<File | null>(null);
+  const [libraries, setLibraries] = useState<File[]>([]);
   const [extra, setExtra] = useState(false);
   const [hot, setHot] = useState(false);
   const pic = useRef<HTMLInputElement>(null);
@@ -219,7 +221,7 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
   function submit() {
     const p: Parts = {};
     const pers: Record<string, unknown> = { name: name.trim(), purpose: purpose.trim(), voice: voice.trim(), boundaries: boundaries.trim() };
-    const kept = hybrid ? tools : pageTools ? tools.filter((t) => PAGE_TOOLS.includes(t)) : [];
+    const kept = hybrid ? [...tools, ...(libraries.length ? ['library'] : [])] : pageTools ? tools.filter((t) => PAGE_TOOLS.includes(t)) : [];
     if (kept.length) pers.tools = kept;
     const mem = memory.split('\n').map((x) => x.trim()).filter(Boolean);
     if (mem.length) pers.memory = mem;
@@ -228,6 +230,7 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
     else if (brain === 'hybrid') p.brain = new File([JSON.stringify({ kind: 'bound', provider, model: hosted })], 'brain.json');
     else if (own) p.model = own;
     if (picture) p.picture = picture;
+    if (hybrid && libraries.length) p.libraries = libraries;
     onCheck(p);
   }
 
@@ -309,7 +312,19 @@ function Builder({ own: ownPath, hybrid, model, busy, onCheck, verify, onVerify,
           <input ref={pic} type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => setPicture(e.target.files?.[0] ?? null)} />
         </div>
 
-        <VerifyStep n={showTools ? 5 : 4} verify={verify} onVerify={onVerify} />
+        {/* hybrid only: an archive the scribe can search while it talks, packed with tools/library-build.ts */}
+        {hybrid && (
+          <>
+            <Sec n={5} t="library" info="a whole archive inscribed with your scribe: documents, transcripts, pictures. your scribe searches it and quotes it while it talks, and anyone can read it on its page. pack a folder into a .library file with tools/library-build.ts in the scribes repo." />
+            <label className={`pic-drop${libraries.length ? ' filled' : ''}`}>
+              <b>{libraries.length ? libraries.map((f) => f.name.toLowerCase()).join(', ') : 'drop .library files here, or click to choose'}</b>
+              <span>{libraries.length ? `${size(libraries.reduce((n, f) => n + f.size, 0)).toLowerCase()}, about ${(libraries.reduce((n, f) => n + Math.ceil(f.size / 960), 0) * 5500 / 1e9).toFixed(3)} sol to inscribe. click to choose again` : 'optional, up to 8'}</span>
+              <input type="file" hidden multiple accept=".library" onChange={(e) => setLibraries(Array.from(e.target.files ?? []).filter((f) => f.name.endsWith('.library')).slice(0, 8))} />
+            </label>
+          </>
+        )}
+
+        <VerifyStep n={hybrid ? 6 : showTools ? 5 : 4} verify={verify} onVerify={onVerify} />
 
         <div className="create-go">
           <button className={`stamp go${ready ? ' ready' : ''}${verify ? ' gold' : ''}`} disabled={!ready || busy} onClick={submit}>inscribe</button>

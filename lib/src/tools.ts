@@ -36,6 +36,7 @@ export const TOOL_CATALOG: ToolInfo[] = [
   { name: 'scribe_market', label: 'Scribe market', group: 'scribes', summary: 'Floor price, listings and recent sales of scribes.', aliases: ['market'] },
   { name: 'bounty_board', label: 'Bounty board', group: 'scribes', summary: 'Open bounties: questions with a SOL reward.', aliases: ['bounties'] },
   { name: 'answer_bounty', label: 'Answer a bounty', group: 'scribes', summary: 'Proposes an answer to a bounty; the owner approves and it is inscribed.', aliases: ['answer'] },
+  { name: 'library', label: 'Library', group: 'scribes', summary: 'Searches and reads the archive inscribed with it (needs a library file).', aliases: ['archive'] },
   { name: 'journal', label: 'Journal', group: 'scribes', summary: 'Proposes a memory; if the owner approves, it is inscribed and remembered.', aliases: ['remember', 'memory', 'diary'] },
   // actions: drafted by the scribe, approved (or not) in the viewer's own wallet
   { name: 'propose_swap', label: 'Swap', group: 'propose', summary: "Drafts a swap at Jupiter's best route.", aliases: ['swap', 'trade'] },
@@ -71,7 +72,7 @@ export const PRESETS: { name: string; hint: string; tools: string[] }[] = [
     tools: ['wallet_portfolio', 'wallet_activity', 'explain_transaction', 'token_prices', 'token_report', 'clock'] },
   { name: 'Collector', hint: 'Lives in the scribe world: the market and other scribes',
     tools: ['scribe_market', 'scribe_lookup', 'ask_scribe', 'journal', 'propose_scribe_trade'] },
-  { name: 'Everything', hint: 'All official tools', tools: [...OFFICIAL_TOOLS] },
+  { name: 'Everything', hint: 'All official tools', tools: OFFICIAL_TOOLS.filter((t) => t !== 'library') }, // the library comes with a library file
 ];
 
 // Personality tool names are free text: match them loosely to the catalog (name, label or alias).

@@ -12,7 +12,8 @@ const NAMES: Record<ToolGroup, [string, string]> = {
 
 // only: offer just these tools (and the presets cut down to them)
 export function ToolPicker({ value, onChange, only }: { value: string[]; onChange: (v: string[]) => void; only?: string[] }) {
-  const catalog = only ? TOOL_CATALOG.filter((t) => only.includes(t.name)) : TOOL_CATALOG;
+  // the library tool is not picked: it comes with a library file (create: the library step)
+  const catalog = (only ? TOOL_CATALOG.filter((t) => only.includes(t.name)) : TOOL_CATALOG).filter((t) => t.name !== 'library');
   const presets = only ? PRESETS.map((p) => ({ ...p, tools: p.tools.filter((t) => only.includes(t)) })).filter((p) => p.tools.length >= 3) : PRESETS;
   const toggle = (t: string, on: boolean) => onChange(on ? [...value, t] : value.filter((x) => x !== t));
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));

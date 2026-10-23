@@ -13,12 +13,15 @@ import { sha256Hex } from '../../lib/src/bytes.ts';
 import { chunkCount } from '../../lib/src/chunk.ts';
 import { writeFile, FileCollector } from '../../lib/src/chain.ts';
 import { readGguf } from '../../lib/src/gguf.ts';
-import { encodeManifest, formatLink, type Brain, type FileRef, type Manifest, type Role, decodeManifest } from '../../lib/src/manifest.ts';
+import { MAX_LIBRARIES, encodeManifest, formatLink, type Brain, type FileRef, type Manifest, type Role, decodeManifest } from '../../lib/src/manifest.ts';
 import { parsePersonality, wordCount } from '../../lib/src/personality.ts';
 import { birthInstruction, configAddress, modelRecord, scribeAddress, scribesProgram, ZERO_SHA } from '../../lib/src/registry.ts';
 import { traits } from '../../lib/src/rarity.ts';
 import { isProvider } from '../../lib/src/hybrid.ts';
+import { isText } from '../../lib/src/library.ts';
+import { enabledTools } from '../../lib/src/tools.ts';
 import type { Indexer } from './indexer.ts';
+import { readLibrary } from './library.ts';
 
 export const LIMITS: Record<string, number> = {
   personality: 64 * 1024,
@@ -26,6 +29,7 @@ export const LIMITS: Record<string, number> = {
   brain: 4 * 1024,
   picture: 8 * 1024 * 1024, // before re-encoding
   model: 2 * 1024 * 1024 * 1024,
+  library: 512 * 1024 * 1024, // brotli-compressed (tools/library-build.ts)
 };
 const FEE_PER_CHUNK = 5000;
 const SCRIBE_ACCOUNT_BYTES = 8 + 191; // discriminator + Scribe (programs/scribes)
@@ -122,7 +126,8 @@ export class Uploads {
     if (bytes.length === 0 || bytes.length > LIMITS[role]) throw new Error(`${role} must be 1 byte to ${LIMITS[role]} bytes`);
     if (!/^[A-Za-z0-9._-]{1,128}$/.test(name)) throw new Error('bad file name');
     const dir = this.folder(id);
-    for (const f of readdirSync(dir)) if (f.startsWith(`${role}--`)) rmSync(join(dir, f)); // one file per part
+    // one file per part, except libraries: one per name
+    for (const f of readdirSync(dir)) if (f.startsWith(`${role}--`) && (role !== 'library' || f === `${role}--${name}`)) rmSync(join(dir, f));
     writeFileSync(join(dir, `${role}--${name}`), bytes);
     this.set(id, { phase: 'uploading' });
   }
@@ -146,14 +151,14 @@ export class Uploads {
 
     // Personality (required).
     let name: string | null = null;
-    let words = 0, tools = 0, memory = 0;
+    let words = 0, tools = 0, memory = 0, toolNames: string[] = [];
     const p = get('personality');
     if (!p) problems.push('Personality: missing (personality.json)');
     else {
       const bytes = new Uint8Array(readFileSync(p.path));
       try {
         const pers = parsePersonality(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-        name = pers.name; words = wordCount(pers); tools = pers.tools?.length ?? 0; memory = pers.memory?.length ?? 0;
+        name = pers.name; words = wordCount(pers); tools = pers.tools?.length ?? 0; memory = pers.memory?.length ?? 0; toolNames = enabledTools(pers.tools);
         parts.push({ role: 'personality', name: 'personality.json', size: bytes.length, bytes, sha256: await sha256Hex(bytes), reusedFrom: null });
       } catch (e) {
         problems.push(`Personality: ${(e as Error).message}`);
@@ -221,6 +226,25 @@ export class Uploads {
         parts.push({ role: 'picture', name: 'picture.webp', size: bytes.length, bytes, sha256: await sha256Hex(bytes), reusedFrom: null });
       } catch (e) {
         problems.push(`Picture: not a readable image (${(e as Error).message})`);
+      }
+    }
+
+    // Library (optional): an archive the scribe searches while it talks, read through entry by entry here
+    // so a broken one is never inscribed. Only a hosted brain can use it, through its library tool.
+    const libs = files.filter((f) => f.role === 'library');
+    if (libs.length > MAX_LIBRARIES) problems.push(`Library: at most ${MAX_LIBRARIES} libraries`);
+    for (const lib of libs.slice(0, MAX_LIBRARIES)) {
+      try {
+        if (!lib.name.endsWith('.library')) throw new Error(`${lib.name}: a library file ends in .library`);
+        if (brain?.kind !== 'bound') throw new Error('only a hybrid scribe (Claude or Grok) can read a library');
+        if (!toolNames.includes('library')) throw new Error('add "library" to the personality\'s tools so the scribe can read it');
+        const utf8 = new TextDecoder('utf-8', { fatal: true });
+        for await (const x of readLibrary(lib.path)) if ('entry' in x && isText(x.entry.type)) utf8.decode(x.bytes);
+        const bytes = new Uint8Array(readFileSync(lib.path));
+        const sha = await sha256Hex(bytes);
+        parts.push({ role: 'library', name: lib.name, size: bytes.length, bytes, sha256: sha, reusedFrom: await this.existing(sha, bytes.length) });
+      } catch (e) {
+        problems.push(`Library ${lib.name}: ${(e as Error).message}`);
       }
     }
 
@@ -344,7 +368,7 @@ export class Uploads {
       const me = this.writer.publicKey.toBase58();
       const byRole = (f: FileRef): Uint8Array => {
         if (f.role === 'runtime') return this.runtime.find((r) => r.name === f.name)!.bytes;
-        const file = readdirSync(dir).find((x) => x.startsWith(`${f.role}--`))!;
+        const file = f.role === 'library' ? `library--${f.name}` : readdirSync(dir).find((x) => x.startsWith(`${f.role}--`))!;
         if (f.role === 'picture') return new Uint8Array(readFileSync(join(dir, 'picture.webp')));
         return new Uint8Array(readFileSync(join(dir, file)));
       };

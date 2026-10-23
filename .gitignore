@@ -9,4 +9,5 @@ test-ledger/
 scribes-frontend/
 scribes-frontend-*/
 scribes-inscribe-flow-*/
+scribes-truth-terminal-*/
 site/vite.local.config.ts

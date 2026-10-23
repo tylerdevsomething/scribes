@@ -28,6 +28,7 @@ import { VerifyPanel } from './Verify.tsx';
 import { Info } from './Create.tsx';
 import { useActivity } from './Activity.tsx';
 import { sol } from '../config.ts';
+import { LibraryPanel } from '../LibraryPanel.tsx';
 import { Rich } from '../Rich.tsx';
 import { Loading, useHold } from '../Loading.tsx';
 
@@ -213,6 +214,7 @@ export function ScribePage({ address, ask }: { address: string; ask?: string }) 
               </div>
             )}
           </div>
+          <LibraryPanel s={s} />
           <Journal s={s} />
           <History s={s} />
         </div>
